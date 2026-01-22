@@ -120,11 +120,11 @@ def main():
     col1, col2 = st.columns(2)
     with col1:
         if not df_kospi.empty:
-            curr = df_kospi.iloc[0]
+            curr = df_kospi.sort_values('thistime', ascending=False).iloc[0]
             st.metric("KOSPI 현재가", f"{float(curr['nowVal']):,.2f}", f"{curr['changeVal']} ({curr['changeRate']}%)")
     with col2:
         if not df_kosdaq.empty:
-            curr = df_kosdaq.iloc[0]
+            curr = df_kosdaq.sort_values('thistime', ascending=False).iloc[0]
             st.metric("KOSDAQ 현재가", f"{float(curr['nowVal']):,.2f}", f"{curr['changeVal']} ({curr['changeRate']}%)")
 
     # pyecharts 차트 생성
@@ -139,8 +139,6 @@ def main():
             symbol="none",
             linestyle_opts=opts.LineStyleOpts(width=1.5, color="#3b82f6"),
             label_opts=opts.LabelOpts(is_show=False),
-            # pyecharts의 endLabel 지원이 버전마다 다를 수 있어 일반 라벨로 대체하거나 설정
-            label_layout_opts=opts.LabelLayoutOpts(move_overlap="shiftY"),
         )
         .add_yaxis(
             series_name="KOSDAQ",
@@ -179,12 +177,10 @@ def main():
                 splitline_opts=opts.SplitLineOpts(is_show=True),
             ),
             legend_opts=opts.LegendOpts(pos_top="5%"),
-            visualmap_opts=None,
         )
     )
     
-    # pyecharts에는 'endLabel'이 직접적인 API로 없을 수 있으므로 
-    # extra_opts를 통해 원시 echarts 옵션을 주입할 수 있습니다.
+    # 원시 옵션을 통해 pyecharts에서 직접 지원하지 않는 속성 주입
     line.options["series"][0]["endLabel"] = {
         "show": True,
         "formatter": "KOSPI: {c}",
@@ -199,10 +195,12 @@ def main():
         "fontWeight": "bold",
         "color": "#10b981"
     }
-    # 애니메이션 강제 적용 (Threshold 0)
+    # 애니메이션 강제 적용 및 레이블 겹침 방지
     line.options["animation"] = True
     line.options["animationDuration"] = 10000
     line.options["animationThreshold"] = 0
+    line.options["series"][0]["labelLayout"] = {"moveOverlap": "shiftY"}
+    line.options["series"][1]["labelLayout"] = {"moveOverlap": "shiftY"}
 
     st_pyecharts(line, height="400px")
 
