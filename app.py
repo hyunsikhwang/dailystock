@@ -1,6 +1,6 @@
 import streamlit as st
 from pyecharts import options as opts
-from pyecharts.charts import Line, Scatter
+from pyecharts.charts import Line
 from streamlit_echarts import st_pyecharts
 import requests
 import pandas as pd
@@ -120,13 +120,9 @@ def main():
     merged = pd.merge(timeline_df, df_p_kospi, on='time_hm', how='left')
     merged = pd.merge(merged, df_p_kosdaq, on='time_hm', how='left')
 
-    # 순수 숫자 리스트 (선 끊김 방지)
+    # 순수 숫자 리스트
     kospi_nums = [clean_value(v) for v in merged['KOSPI']]
     kosdaq_nums = [clean_value(v) for v in merged['KOSDAQ']]
-
-    # 30분 간격 마커 데이터 (Scatter용)
-    kospi_markers = [v if i % 30 == 0 else None for i, v in enumerate(kospi_nums)]
-    kosdaq_markers = [v if i % 30 == 0 else None for i, v in enumerate(kosdaq_nums)]
 
     # 최고/최저점 좌표 계산
     k_max_info, k_min_info = get_extrema_info(full_timeline, kospi_nums)
@@ -147,11 +143,10 @@ def main():
             curr = df_kosdaq.sort_values('thistime', ascending=False).iloc[0]
             st.metric("KOSDAQ 현재가", f"{float(curr['nowVal']):,.2f}", f"{curr['changeVal']} ({curr['changeRate']}%)")
 
-    # pyecharts 차트 구성
+    # pyecharts 차트 구성 (마커 제거 버전)
     line = (
-        Line(init_opts=opts.InitOpts(height="400px", width="100%"))
+        Line(init_opts=opts.InitOpts(height="300px", width="100%"))
         .add_xaxis(xaxis_data=full_timeline)
-        # KOSPI 라인
         .add_yaxis(
             series_name="KOSPI",
             y_axis=kospi_nums,
@@ -161,18 +156,6 @@ def main():
             linestyle_opts=opts.LineStyleOpts(width=1.5, color="#3b82f6"),
             label_opts=opts.LabelOpts(is_show=False),
         )
-        # KOSPI 30분 마커 (Scatter 오버레이)
-        .add_yaxis(
-            series_name="KOSPI 30m 마커",
-            y_axis=kospi_markers,
-            yaxis_index=0,
-            symbol="circle",
-            symbol_size=6,
-            itemstyle_opts=opts.ItemStyleOpts(color="#3b82f6", border_width=1, border_color="#fff"),
-            label_opts=opts.LabelOpts(is_show=False),
-            is_hover_animation=False,
-        )
-        # KOSDAQ 라인
         .add_yaxis(
             series_name="KOSDAQ",
             y_axis=kosdaq_nums,
@@ -181,17 +164,6 @@ def main():
             symbol="none",
             linestyle_opts=opts.LineStyleOpts(width=1.5, color="#10b981"),
             label_opts=opts.LabelOpts(is_show=False),
-        )
-        # KOSDAQ 30분 마커 (Scatter 오버레이)
-        .add_yaxis(
-            series_name="KOSDAQ 30m 마커",
-            y_axis=kosdaq_markers,
-            yaxis_index=1,
-            symbol="circle",
-            symbol_size=6,
-            itemstyle_opts=opts.ItemStyleOpts(color="#10b981", border_width=1, border_color="#fff"),
-            label_opts=opts.LabelOpts(is_show=False),
-            is_hover_animation=False,
         )
         .extend_axis(
             yaxis=opts.AxisOpts(
@@ -210,7 +182,7 @@ def main():
             xaxis_opts=opts.AxisOpts(
                 type_="category",
                 boundary_gap=False,
-                axislabel_opts=opts.LabelOpts(interval=29),
+                axislabel_opts=opts.LabelOpts(interval=29), # 30분 단위 축 레이블 유지
             ),
             yaxis_opts=opts.AxisOpts(
                 name="KOSPI",
@@ -220,12 +192,11 @@ def main():
                 is_scale=True,
                 splitline_opts=opts.SplitLineOpts(is_show=True),
             ),
-            legend_opts=opts.LegendOpts(pos_top="5%", selected_mode="single"), # 마커 시리즈가 범례에 나오는걸 피하기 위해 선택 모드 설정하거나 범례 필터링 가능
+            legend_opts=opts.LegendOpts(pos_top="5%"),
         )
     )
     
-    # 원시 옵션 주입 (endLabel 및 MarkPoint 시간 표시)
-    # KOSPI
+    # KOSPI 극점 및 라벨 (Index 0)
     if k_max_info and k_min_info:
         line.options["series"][0]["markPoint"] = {
             "data": [
@@ -233,27 +204,25 @@ def main():
                 {"name": "최저", "coord": [k_min_info[0], k_min_info[1]], "itemStyle": {"color": "#3b82f6"}, "label": {"formatter": f"최저\n{k_min_info[0]}\n{k_min_info[1]:,.2f}"}}
             ]
         }
+    line.options["series"][0]["endLabel"] = {"show": True, "formatter": "KOSPI: {c}", "fontWeight": "bold", "color": "#3b82f6"}
     
-    # KOSDAQ (index 2 because index 1 is KOSPI marker scatter)
+    # KOSDAQ 극점 및 라벨 (Index 1)
     if q_max_info and q_min_info:
-        line.options["series"][2]["markPoint"] = {
+        line.options["series"][1]["markPoint"] = {
             "data": [
                 {"name": "최고", "coord": [q_max_info[0], q_max_info[1]], "itemStyle": {"color": "#ef4444"}, "label": {"formatter": f"최고\n{q_max_info[0]}\n{q_max_info[1]:,.2f}"}},
                 {"name": "최저", "coord": [q_min_info[0], q_min_info[1]], "itemStyle": {"color": "#10b981"}, "label": {"formatter": f"최저\n{q_min_info[0]}\n{q_min_info[1]:,.2f}"}}
             ]
         }
-
-    line.options["series"][0]["endLabel"] = {"show": True, "formatter": "KOSPI: {c}", "fontWeight": "bold", "color": "#3b82f6"}
-    line.options["series"][2]["endLabel"] = {"show": True, "formatter": "KOSDAQ: {c}", "fontWeight": "bold", "color": "#10b981"}
-    
-    # 범례에서 마커 시리즈 숨기기
-    line.options["legend"][0]["data"] = ["KOSPI", "KOSDAQ"]
+    line.options["series"][1]["endLabel"] = {"show": True, "formatter": "KOSDAQ: {c}", "fontWeight": "bold", "color": "#10b981"}
     
     line.options["animation"] = True
     line.options["animationDuration"] = 10000
     line.options["animationThreshold"] = 0
+    line.options["series"][0]["labelLayout"] = {"moveOverlap": "shiftY"}
+    line.options["series"][1]["labelLayout"] = {"moveOverlap": "shiftY"}
 
-    st_pyecharts(line, height="400px")
+    st_pyecharts(line, height="300px")
 
 if __name__ == "__main__":
     main()
