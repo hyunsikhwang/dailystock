@@ -52,6 +52,27 @@ def generate_full_timeline():
         curr += timedelta(minutes=1)
     return timeline
 
+def calculate_y_axis_bounds(values):
+    """지수 값이 Y축 중앙(또는 시작점)에 오도록 min, max 계산"""
+    valid_values = [v for v in values if v is not None]
+    if not valid_values:
+        return None, None
+    
+    start_val = valid_values[0] # 09:00 데이터
+    max_val = max(valid_values)
+    min_val = min(valid_values)
+    
+    # 시작점으로부터 가장 먼 변동폭 계산
+    diff_max = abs(max_val - start_val)
+    diff_min = abs(start_val - min_val)
+    margin = max(diff_max, diff_min) * 1.2 # 여유 공간 20% 추가
+    
+    # 여유 공간이 너무 작으면 최소한의 범위를 가짐
+    if margin == 0:
+        margin = start_val * 0.01
+
+    return start_val - margin, start_val + margin
+
 def main():
     st.title("🏃‍♂️ KOSPI & KOSDAQ 실시간 지수")
     
@@ -74,7 +95,9 @@ def main():
     def process_df(df, name):
         if df.empty: return pd.DataFrame(columns=['time_hm', name])
         df['time_hm'] = df['thistime'].apply(lambda x: f"{x[8:10]}:{x[10:12]}")
-        return df[['time_hm', 'nowVal']].rename(columns={'nowVal': name})
+        # API는 최신순이므로 역순으로 정렬하여 과거 데이터를 앞으로 보냄
+        df_sorted = df.sort_values('thistime')
+        return df_sorted[['time_hm', 'nowVal']].rename(columns={'nowVal': name})
 
     df_p_kospi = process_df(df_kospi, 'KOSPI')
     df_p_kosdaq = process_df(df_kosdaq, 'KOSDAQ')
@@ -86,11 +109,15 @@ def main():
     kospi_values = [clean_value(v) for v in merged['KOSPI']]
     kosdaq_values = [clean_value(v) for v in merged['KOSDAQ']]
 
+    # Y축 범위 계산 (09:00 지수 위치 동기화)
+    k_min, k_max = calculate_y_axis_bounds(kospi_values)
+    q_min, q_max = calculate_y_axis_bounds(kosdaq_values)
+
     # 상단 지표 영역 (가로 배치)
     col1, col2 = st.columns(2)
     with col1:
         if not df_kospi.empty:
-            curr = df_kospi.iloc[0]
+            curr = df_kospi.iloc[0] # 최신 데이터
             st.metric("KOSPI 현재가", f"{float(curr['nowVal']):,.2f}", f"{curr['changeVal']} ({curr['changeRate']}%)")
     with col2:
         if not df_kosdaq.empty:
@@ -102,7 +129,7 @@ def main():
         "animation": True,
         "animationDuration": 10000,
         "animationThreshold": 2000,
-        "title": {"text": "지수 실시간 추이"},
+        "title": {"text": "지수 실시간 추이 (시작점 동기화)"},
         "tooltip": {
             "trigger": "axis",
             "axisPointer": {"type": "line"}
@@ -124,8 +151,21 @@ def main():
             }
         },
         "yAxis": [
-            {"name": "KOSPI", "type": "value", "scale": True},
-            {"name": "KOSDAQ", "type": "value", "scale": True}
+            {
+                "name": "KOSPI", 
+                "type": "value", 
+                "min": k_min, 
+                "max": k_max,
+                "splitLine": {"show": True}
+            },
+            {
+                "name": "KOSDAQ", 
+                "type": "value", 
+                "min": q_min, 
+                "max": q_max,
+                "yAxisIndex": 1,
+                "splitLine": {"show": False}
+            }
         ],
         "series": [
             {
@@ -134,7 +174,7 @@ def main():
                 "data": kospi_values,
                 "smooth": True,
                 "showSymbol": False,
-                "lineStyle": {"width": 1.5, "color": "#3b82f6"}, # 현대적인 블색
+                "lineStyle": {"width": 1.5, "color": "#3b82f6"},
                 "endLabel": {
                     "show": True,
                     "formatter": "KOSPI: {c}",
@@ -151,7 +191,7 @@ def main():
                 "data": kosdaq_values,
                 "smooth": True,
                 "showSymbol": False,
-                "lineStyle": {"width": 1.5, "color": "#10b981"}, # 세련된 에메랄드 그린
+                "lineStyle": {"width": 1.5, "color": "#10b981"},
                 "endLabel": {
                     "show": True,
                     "formatter": "KOSDAQ: {c}",
@@ -165,7 +205,7 @@ def main():
     }
 
     # 차트 렌더링
-    st_echarts(options=options, height="300px", key="kospi_kosdaq_line_chart")
+    st_echarts(options=options, height="400px", key="kospi_kosdaq_synced_chart")
 
 if __name__ == "__main__":
     main()
