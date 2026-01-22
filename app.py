@@ -100,17 +100,9 @@ def main():
             curr = df_kosdaq.iloc[0]
             st.metric("KOSDAQ", f"{float(curr['nowVal']):,.2f}", f"{curr['changeVal']} ({curr_kosdaq['changeRate'] if 'curr_kosdaq' in locals() else curr['changeRate']}%)")
 
-    # ECharts 옵션 설정
-    # animationDuration을 늘리고 animationThreshold를 0으로 설정하여 
-    # 데이터 포인트 수에 관계없이 천천히 애니메이션되도록 강제합니다.
-    # JsCode 대신 순수 JSON 호환 형식으로만 작성합니다.
-    options = {
         "animation": True,
-        "animationDuration": 20000,
-        "animationEasing": "linear",
-        "animationDurationUpdate": 20000,
-        "animationEasingUpdate": "linear",
-        "animationThreshold": 0,  # 데이터 포인트가 많아도 애니메이션 생략 안 함
+        "animationDuration": 1000, # 기본 애니메이션 지속 시간
+        "animationThreshold": 2000,
         "title": {"text": "지수 실시간 추이"},
         "tooltip": {
             "trigger": "axis",
@@ -119,7 +111,7 @@ def main():
         "legend": {"data": ["KOSPI", "KOSDAQ"]},
         "grid": {
             "left": "3%",
-            "right": "12%", # endLabel 표시 공간을 위해 오른쪽 여백 확대
+            "right": "12%", 
             "bottom": "5%",
             "containLabel": True
         },
@@ -128,7 +120,7 @@ def main():
             "data": full_timeline,
             "boundaryGap": False,
             "axisLabel": {
-                "interval": 29, # 30분 단위 (0, 30, 60...)
+                "interval": 29, 
                 "formatter": "{value}"
             }
         },
@@ -143,16 +135,15 @@ def main():
                 "data": kospi_values,
                 "smooth": True,
                 "showSymbol": False,
-                "lineStyle": {"width": 4},
+                "lineStyle": {"width": 1.5, "color": "#5470c6"},
                 "endLabel": {
                     "show": True,
                     "formatter": "KOSPI: {c}",
                     "offset": [10, 0],
-                    "fontWeight": "bold"
+                    "fontWeight": "bold",
+                    "color": "#5470c6"
                 },
-                "emphasis": {"focus": "series"},
-                "animationDuration": 20000,
-                "animationEasing": "linear"
+                "emphasis": {"focus": "series"}
             },
             {
                 "name": "KOSDAQ",
@@ -161,19 +152,17 @@ def main():
                 "data": kosdaq_values,
                 "smooth": True,
                 "showSymbol": False,
-                "lineStyle": {"width": 4},
+                "lineStyle": {"width": 1.5, "color": "#91cc75"},
                 "endLabel": {
                     "show": True,
                     "formatter": "KOSDAQ: {c}",
                     "offset": [10, 0],
-                    "fontWeight": "bold"
+                    "fontWeight": "bold",
+                    "color": "#91cc75"
                 },
-                "emphasis": {"focus": "series"},
-                "animationDuration": 20000,
-                "animationEasing": "linear"
+                "emphasis": {"focus": "series"}
             }
         ]
-    }
 
     # 차트 렌더링 (인스턴스 재생성을 위해 키를 고정하거나 필요시 변경)
     st_echarts(options=options, height="600px", key="line_race_chart_fixed_final")
