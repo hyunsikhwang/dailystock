@@ -17,6 +17,7 @@ def get_today_str():
 
 def fetch_index_data(index_type, today_str):
     """네이버 증권 API를 통해 특정 지수(KOSPI/KOSDAQ) 데이터를 가져옴"""
+    # pageSize를 충분히 크게 설정 (500)
     url = f"https://stock.naver.com/api/domestic/indexSise/time?koreaIndexType={index_type}&thistime={today_str}&startIdx=0&pageSize=500"
     try:
         response = requests.get(url)
@@ -24,9 +25,7 @@ def fetch_index_data(index_type, today_str):
         data = response.json()
         if not data:
             return pd.DataFrame()
-        df = pd.DataFrame(data)
-        # thistime을 string으로 유지하면서 시간 부분만 추출하기 쉽게 처리
-        return df
+        return pd.DataFrame(data)
     except Exception as e:
         st.error(f"{index_type} 데이터를 가져오는 중 오류 발생: {e}")
         return pd.DataFrame()
@@ -55,7 +54,7 @@ def generate_full_timeline():
     return timeline
 
 def main():
-    st.title("🏃‍♂️ KOSPI & KOSDAQ Line Race")
+    st.title("🏃‍♂️ KOSPI & KOSDAQ 지수 실시간 레이스")
     
     today_str = get_today_str()
     st.write(f"기준 날짜: {today_str} (한국 시간)")
@@ -72,51 +71,58 @@ def main():
     full_timeline = generate_full_timeline()
     timeline_df = pd.DataFrame({'time_hm': full_timeline})
 
-    # 데이터 가공 함수
+    # 데이터 가공
     def process_df(df, name):
-        if df.empty:
-            return pd.DataFrame(columns=['time_hm', name])
-        # MMSS 부분만 추출하여 HH:MM 형식으로 변환 (YYYYMMDDHHMMSS)
+        if df.empty: return pd.DataFrame(columns=['time_hm', name])
+        # API는 최신순이므로 전처리를 위해 시간 추출
         df['time_hm'] = df['thistime'].apply(lambda x: f"{x[8:10]}:{x[10:12]}")
         return df[['time_hm', 'nowVal']].rename(columns={'nowVal': name})
 
     df_p_kospi = process_df(df_kospi, 'KOSPI')
     df_p_kosdaq = process_df(df_kosdaq, 'KOSDAQ')
 
-    # 병합: 전체 타임라인에 실제 데이터 붙이기
+    # 병합
     merged = pd.merge(timeline_df, df_p_kospi, on='time_hm', how='left')
     merged = pd.merge(merged, df_p_kosdaq, on='time_hm', how='left')
 
-    # 값 정제
     kospi_values = [clean_value(v) for v in merged['KOSPI']]
     kosdaq_values = [clean_value(v) for v in merged['KOSDAQ']]
 
-    # 상단 지표 영역
+    # 상단 지표 영역 (가로 배치)
     col1, col2 = st.columns(2)
     with col1:
         if not df_kospi.empty:
-            curr_kospi = df_kospi.iloc[0] # API는 최신 데이터가 인덱스 0일 수 있음 확인 필요
-            # pageSize=500이므로 0번 인덱스가 가장 최근 데이터임
-            st.metric("KOSPI", f"{float(curr_kospi['nowVal']):,.2f}", f"{curr_kospi['changeVal']} ({curr_kospi['changeRate']}%)")
+            # API 응답의 0번 인덱스가 보통 가장 최신 데이터임
+            curr = df_kospi.iloc[0]
+            st.metric("KOSPI", f"{float(curr['nowVal']):,.2f}", f"{curr['changeVal']} ({curr['changeRate']}%)")
     with col2:
         if not df_kosdaq.empty:
-            curr_kosdaq = df_kosdaq.iloc[0]
-            st.metric("KOSDAQ", f"{float(curr_kosdaq['nowVal']):,.2f}", f"{curr_kosdaq['changeVal']} ({curr_kosdaq['changeRate']}%)")
+            curr = df_kosdaq.iloc[0]
+            st.metric("KOSDAQ", f"{float(curr['nowVal']):,.2f}", f"{curr['changeVal']} ({curr_kosdaq['changeRate'] if 'curr_kosdaq' in locals() else curr['changeRate']}%)")
 
     # ECharts 옵션 설정
-    # Line Race 스타일 구현
+    # animationDuration을 늘리고 animationThreshold를 0으로 설정하여 
+    # 데이터 포인트 수에 관계없이 천천히 애니메이션되도록 강제합니다.
+    # JsCode 대신 순수 JSON 호환 형식으로만 작성합니다.
     options = {
         "animation": True,
-        "animationDuration": 15000,
-        "animationEasing": "cubicInOut",
-        "animationThreshold": 0,
-        "title": {"text": "지수 실시간 레이스"},
+        "animationDuration": 20000,
+        "animationEasing": "linear",
+        "animationDurationUpdate": 20000,
+        "animationEasingUpdate": "linear",
+        "animationThreshold": 0,  # 데이터 포인트가 많아도 애니메이션 생략 안 함
+        "title": {"text": "지수 실시간 추이"},
         "tooltip": {
             "trigger": "axis",
-            "axisPointer": {"type": "shadow"}
+            "axisPointer": {"type": "line"}
         },
-        "legend": {"data": ["KOSPI", "KOSDAQ"], "top": "5%"},
-        "grid": {"left": "3%", "right": "10%", "bottom": "5%", "containLabel": True},
+        "legend": {"data": ["KOSPI", "KOSDAQ"]},
+        "grid": {
+            "left": "3%",
+            "right": "12%", # endLabel 표시 공간을 위해 오른쪽 여백 확대
+            "bottom": "5%",
+            "containLabel": True
+        },
         "xAxis": {
             "type": "category",
             "data": full_timeline,
@@ -137,18 +143,16 @@ def main():
                 "data": kospi_values,
                 "smooth": True,
                 "showSymbol": False,
-                "lineStyle": {"width": 4, "color": "#5470c6"},
-                # Line Race 핵심: 끝에 라벨 표시
+                "lineStyle": {"width": 4},
                 "endLabel": {
                     "show": True,
                     "formatter": "KOSPI: {c}",
-                    "distance": 10,
-                    "color": "#5470c6",
+                    "offset": [10, 0],
                     "fontWeight": "bold"
                 },
-                "labelLayout": {"moveOverlap": "shiftY"},
                 "emphasis": {"focus": "series"},
-                "animationDuration": 15000
+                "animationDuration": 20000,
+                "animationEasing": "linear"
             },
             {
                 "name": "KOSDAQ",
@@ -157,22 +161,22 @@ def main():
                 "data": kosdaq_values,
                 "smooth": True,
                 "showSymbol": False,
-                "lineStyle": {"width": 4, "color": "#91cc75"},
+                "lineStyle": {"width": 4},
                 "endLabel": {
                     "show": True,
                     "formatter": "KOSDAQ: {c}",
-                    "distance": 10,
-                    "color": "#91cc75",
+                    "offset": [10, 0],
                     "fontWeight": "bold"
                 },
-                "labelLayout": {"moveOverlap": "shiftY"},
                 "emphasis": {"focus": "series"},
-                "animationDuration": 15000
+                "animationDuration": 20000,
+                "animationEasing": "linear"
             }
         ]
     }
 
-    st_echarts(options=options, height="650px", key="line_race_chart")
+    # 차트 렌더링 (인스턴스 재생성을 위해 키를 고정하거나 필요시 변경)
+    st_echarts(options=options, height="600px", key="line_race_chart_fixed_final")
 
 if __name__ == "__main__":
     main()
