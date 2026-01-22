@@ -109,12 +109,35 @@ def main():
     merged = pd.merge(timeline_df, df_p_kospi, on='time_hm', how='left')
     merged = pd.merge(merged, df_p_kosdaq, on='time_hm', how='left')
 
-    kospi_values = [clean_value(v) for v in merged['KOSPI']]
-    kosdaq_values = [clean_value(v) for v in merged['KOSDAQ']]
+    # 30분 간격으로 마커(심볼) 설정 로직
+    # ECharts에서 개별 포인트에 심볼을 설정하려면 dict 형태의 데이터를 사용합니다.
+    def prepare_values_with_markers(raw_values):
+        processed = []
+        for i, v in enumerate(raw_values):
+            val = clean_value(v)
+            if i % 30 == 0 and val is not None:
+                # 30분 간격 포인트에는 심볼 추가
+                processed.append({
+                    "value": val,
+                    "symbol": "circle",
+                    "symbolSize": 6,
+                    "itemStyle": {"borderWidth": 1, "borderColor": "#fff"}
+                })
+            else:
+                processed.append(val)
+        return processed
 
-    # Y축 범위 계산
-    k_min, k_max = calculate_y_axis_bounds(kospi_values)
-    q_min, q_max = calculate_y_axis_bounds(kosdaq_values)
+    kospi_values_raw = merged['KOSPI'].tolist()
+    kosdaq_values_raw = merged['KOSDAQ'].tolist()
+    
+    kospi_values = prepare_values_with_markers(kospi_values_raw)
+    kosdaq_values = prepare_values_with_markers(kosdaq_values_raw)
+
+    # Y축 범위 계산용 (원시 수치 필요)
+    kospi_nums = [clean_value(v) for v in kospi_values_raw]
+    kosdaq_nums = [clean_value(v) for v in kosdaq_values_raw]
+    k_min, k_max = calculate_y_axis_bounds(kospi_nums)
+    q_min, q_max = calculate_y_axis_bounds(kosdaq_nums)
 
     # 상단 지표
     col1, col2 = st.columns(2)
@@ -124,22 +147,22 @@ def main():
             st.metric("KOSPI 현재가", f"{float(curr['nowVal']):,.2f}", f"{curr['changeVal']} ({curr['changeRate']}%)")
     with col2:
         if not df_kosdaq.empty:
+            curr = df_kosdaq.iloc[0] # 이미 fetch 시 정렬 안되어있을 수 있으니 재확인
             curr = df_kosdaq.sort_values('thistime', ascending=False).iloc[0]
             st.metric("KOSDAQ 현재가", f"{float(curr['nowVal']):,.2f}", f"{curr['changeVal']} ({curr['changeRate']}%)")
 
     # pyecharts 차트 생성
     line = (
-        Line(init_opts=opts.InitOpts(height="400px", width="100%"))
+        Line(init_opts=opts.InitOpts(height="300px", width="100%"))
         .add_xaxis(xaxis_data=full_timeline)
         .add_yaxis(
             series_name="KOSPI",
             y_axis=kospi_values,
             yaxis_index=0,
             is_smooth=True,
-            symbol="none",
+            symbol="none", # 기본 심볼은 숨김 (커스텀 심볼만 표시됨)
             linestyle_opts=opts.LineStyleOpts(width=1.5, color="#3b82f6"),
             label_opts=opts.LabelOpts(is_show=False),
-            # 최고/최저점 표시 추가
             markpoint_opts=opts.MarkPointOpts(
                 data=[
                     opts.MarkPointItem(type_="max", name="최고점", itemstyle_opts=opts.ItemStyleOpts(color="#ef4444")),
@@ -155,7 +178,6 @@ def main():
             symbol="none",
             linestyle_opts=opts.LineStyleOpts(width=1.5, color="#10b981"),
             label_opts=opts.LabelOpts(is_show=False),
-            # 최고/최저점 표시 추가
             markpoint_opts=opts.MarkPointOpts(
                 data=[
                     opts.MarkPointItem(type_="max", name="최고점", itemstyle_opts=opts.ItemStyleOpts(color="#ef4444")),
@@ -194,7 +216,7 @@ def main():
         )
     )
     
-    # 원시 옵션을 통해 pyecharts에서 직접 지원하지 않는 속성 주입
+    # 원시 옵션 주입
     line.options["series"][0]["endLabel"] = {
         "show": True,
         "formatter": "KOSPI: {c}",
@@ -209,14 +231,13 @@ def main():
         "fontWeight": "bold",
         "color": "#10b981"
     }
-    # 애니메이션 강제 적용 및 레이블 겹침 방지
     line.options["animation"] = True
     line.options["animationDuration"] = 10000
     line.options["animationThreshold"] = 0
     line.options["series"][0]["labelLayout"] = {"moveOverlap": "shiftY"}
     line.options["series"][1]["labelLayout"] = {"moveOverlap": "shiftY"}
 
-    st_pyecharts(line, height="400px")
+    st_pyecharts(line, height="300px")
 
 if __name__ == "__main__":
     main()
