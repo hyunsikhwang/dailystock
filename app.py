@@ -44,18 +44,19 @@ def main():
         st.info("📌 현재는 주가 정보가 없습니다. (휴장일이거나 데이터 로딩 실패)")
         return
 
-    # 데이터 병합 및 결측치 처리 (NaN -> None)
+    # 데이터 병합
     merged = pd.merge(
         df_kospi[['thistime', 'nowVal']].rename(columns={'nowVal': 'KOSPI'}),
         df_kosdaq[['thistime', 'nowVal']].rename(columns={'nowVal': 'KOSDAQ'}),
         on='thistime',
         how='outer'
     ).sort_values('thistime')
-    merged = merged.where(pd.notnull(merged), None)
 
-    times = merged['thistime'].apply(lambda x: f"{str(x)[8:10]}:{str(x)[10:12]}").tolist()
-    kospi_values = merged['KOSPI'].tolist()
-    kosdaq_values = merged['KOSDAQ'].tolist()
+    # Y축 데이터 (NaN을 Python None으로 확실하게 변환하여 JSON 에러 방지)
+    # merged.where 대신 리스트 컴프리헨션 사용
+    times = [f"{str(x)[8:10]}:{str(x)[10:12]}" for x in merged['thistime']]
+    kospi_values = [float(v) if pd.notnull(v) else None for v in merged['KOSPI']]
+    kosdaq_values = [float(v) if pd.notnull(v) else None for v in merged['KOSDAQ']]
 
     # 상단 지표 영역 (가로 배치)
     col1, col2 = st.columns(2)
@@ -69,11 +70,9 @@ def main():
             st.metric("KOSDAQ 현재가", f"{float(curr_kosdaq['nowVal']):,.2f}", f"{curr_kosdaq['changeVal']} ({curr_kosdaq['changeRate']}%)")
 
     # ECharts 옵션 설정
-    # animationThreshold를 2000으로 높여 애니메이션이 항상 작동하게 함
-    # animationDelay에 JsCode를 사용하여 포인트별 50ms 지연 부여
     options = {
         "animation": True,
-        "animationDuration": 30000,
+        "animationDuration": 20000,
         "animationEasing": "linear",
         "animationThreshold": 2000,
         "title": {"text": "실시간 지수 추이 (천천히 그리기)"},
@@ -100,7 +99,7 @@ def main():
                 "smooth": True,
                 "showSymbol": False,
                 "lineStyle": {"width": 3, "color": "#5470c6"},
-                "animationDuration": 30000,
+                "animationDuration": 20000,
                 "animationEasing": "linear",
                 "animationDelay": JsCode("function (idx) { return idx * 50; }")
             },
@@ -112,14 +111,14 @@ def main():
                 "smooth": True,
                 "showSymbol": False,
                 "lineStyle": {"width": 3, "color": "#91cc75"},
-                "animationDuration": 30000,
+                "animationDuration": 20000,
                 "animationEasing": "linear",
                 "animationDelay": JsCode("function (idx) { return idx * 50; }")
             }
         ]
     }
 
-    # 차트 렌더링 (stable key 사용)
+    # 차트 렌더링
     st_echarts(options=options, height="600px", key="kospi_kosdaq_chart")
 
 if __name__ == "__main__":
