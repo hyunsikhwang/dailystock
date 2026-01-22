@@ -9,7 +9,7 @@ from datetime import datetime, time, timedelta
 import pytz
 
 # 페이지 설정
-st.set_page_config(page_title="KOSPI & KOSDAQ 실시간 지수 (pyecharts)", layout="wide")
+st.set_page_config(page_title="KOSPI & KOSDAQ 실시간 지수", layout="wide")
 
 def get_today_str():
     """한국 시간 기준 오늘 날짜를 YYYYMMDD 형식으로 반환"""
@@ -81,7 +81,7 @@ def calculate_y_axis_bounds(values):
     return float(reference_val - margin), float(reference_val + margin)
 
 def main():
-    st.title("🏃‍♂️ KOSPI & KOSDAQ 실시간 지수 (pyecharts)")
+    st.title("🏃‍♂️ KOSPI & KOSDAQ 실시간 지수")
     
     today_str = get_today_str()
     st.write(f"기준 날짜: {today_str} (한국 시간)")
@@ -175,7 +175,7 @@ def main():
             )
         )
         .set_global_opts(
-            title_opts=opts.TitleOpts(title="지수 실시간 추이 (시작점 동기화)"),
+            title_opts=opts.TitleOpts(title="지수 실시간 추이"),
             tooltip_opts=opts.TooltipOpts(trigger="axis", axis_pointer_type="line"),
             xaxis_opts=opts.AxisOpts(
                 type_="category",
