@@ -54,12 +54,13 @@ def main():
         how='outer'
     ).sort_values('thistime')
 
-    # X축: 시간 (HH:MM 형식)
-    times = merged['thistime'].apply(lambda x: f"{str(x)[8:10]}:{str(x)[10:12]}").tolist()
-    
     # Y축 데이터 (NaN은 null로 처리되어 ECharts에서 끊김 없이 표현됨)
-    kospi_values = merged['KOSPI'].astype(float).tolist()
-    kosdaq_values = merged['KOSDAQ'].astype(float).tolist()
+    # merged.where(pd.notnull(merged), None) 을 사용하여 NaN을 None(null)으로 변환
+    merged = merged.where(pd.notnull(merged), None)
+    
+    times = merged['thistime'].apply(lambda x: f"{str(x)[8:10]}:{str(x)[10:12]}").tolist()
+    kospi_values = merged['KOSPI'].tolist()
+    kosdaq_values = merged['KOSDAQ'].tolist()
 
     # ECharts 옵션 설정
     # 애니메이션 효과 극대화를 위해 포인트별 delay 함수 사용
