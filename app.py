@@ -6,7 +6,7 @@ from datetime import datetime
 import pytz
 
 # 페이지 설정
-st.set_page_config(page_title="KOSPI 지수 실시간 차트", layout="wide")
+st.set_page_config(page_title="KOSPI & KOSDAQ 실시간 차트", layout="wide")
 
 def get_today_str():
     """한국 시간 기준 오늘 날짜를 YYYYMMDD 형식으로 반환"""
@@ -14,98 +14,112 @@ def get_today_str():
     now = datetime.now(seoul_tz)
     return now.strftime('%Y%m%d')
 
-def fetch_kospi_data(today_str):
-    """네이버 증권 API를 통해 KOSPI 데이터를 가져옴"""
-    url = f"https://stock.naver.com/api/domestic/indexSise/time?koreaIndexType=KOSPI&thistime={today_str}&startIdx=0&pageSize=500"
+def fetch_index_data(index_type, today_str):
+    """네이버 증권 API를 통해 특정 지수(KOSPI/KOSDAQ) 데이터를 가져옴"""
+    url = f"https://stock.naver.com/api/domestic/indexSise/time?koreaIndexType={index_type}&thistime={today_str}&startIdx=0&pageSize=500"
     try:
         response = requests.get(url)
         response.raise_for_status()
         data = response.json()
-        return data
+        if not data:
+            return pd.DataFrame()
+        df = pd.DataFrame(data)
+        # 시간 정렬을 위해 datetime 변환
+        df['dt'] = pd.to_datetime(df['thistime'], format='%Y%m%d%H%M%S')
+        return df.sort_values('dt')
     except Exception as e:
-        st.error(f"데이터를 가져오는 중 오류가 발생했습니다: {e}")
-        return None
+        st.error(f"{index_type} 데이터를 가져오는 중 오류 발생: {e}")
+        return pd.DataFrame()
 
 def main():
-    st.title("📊 KOSPI 지수 실시간 시각화 (ECharts)")
+    st.title("📊 KOSPI & KOSDAQ 실시간 지수 (애니메이션)")
     
     today_str = get_today_str()
-    st.write(f"기준 날짜: {today_str}")
+    st.write(f"기준 날짜: {today_str} (한국 시간)")
 
     with st.spinner('데이터를 불러오고 있습니다...'):
-        data = fetch_kospi_data(today_str)
+        df_kospi = fetch_index_data("KOSPI", today_str)
+        df_kosdaq = fetch_index_data("KOSDAQ", today_str)
 
-    if not data:
+    if df_kospi.empty and df_kosdaq.empty:
         st.info("📌 현재는 주가 정보가 없습니다. (휴장일이거나 데이터 로딩 실패)")
         return
 
-    # 데이터 가공
-    # API는 최신 데이터가 앞에 오는 경우가 많으므로 시간 순서대로 정렬 (YYYYMMDDHHMMSS)
-    df = pd.DataFrame(data)
-    df['thistime_dt'] = pd.to_datetime(df['thistime'], format='%Y%m%d%H%M%S')
-    df = df.sort_values('thistime_dt')
+    # 두 데이터프레임을 시간(thistime) 기준으로 병합 (시간축 동기화)
+    # 한쪽만 있을 경우를 대비해 outer join
+    merged = pd.merge(
+        df_kospi[['thistime', 'nowVal']].rename(columns={'nowVal': 'KOSPI'}),
+        df_kosdaq[['thistime', 'nowVal']].rename(columns={'nowVal': 'KOSDAQ'}),
+        on='thistime',
+        how='outer'
+    ).sort_values('thistime')
 
-    # X축 (시간), Y축 (지수)
-    times = df['thistime'].apply(lambda x: f"{x[8:10]}:{x[10:12]}").tolist()
-    values = df['nowVal'].astype(float).tolist()
+    # X축: 시간 (HH:MM 형식)
+    times = merged['thistime'].apply(lambda x: f"{str(x)[8:10]}:{str(x)[10:12]}").tolist()
+    
+    # Y축 데이터 (NaN은 null로 처리되어 ECharts에서 끊김 없이 표현됨)
+    kospi_values = merged['KOSPI'].astype(float).tolist()
+    kosdaq_values = merged['KOSDAQ'].astype(float).tolist()
 
     # ECharts 옵션 설정
+    # 애니메이션 효과 극대화를 위해 포인트별 delay 함수 사용
     options = {
-        "animation": True,
-        "animationDuration": 20000,
-        "animationEasing": "linear",
-        "title": {"text": "KOSPI 분단위 지수"},
+        "title": {"text": "실시간 지수 추이"},
         "tooltip": {
             "trigger": "axis",
-            "formatter": "{b} <br/> 지수: {c}"
+            "axisPointer": {"type": "cross"}
         },
+        "legend": {"data": ["KOSPI", "KOSDAQ"]},
+        "grid": {"left": "3%", "right": "4%", "bottom": "3%", "containLabel": True},
         "xAxis": {
             "type": "category",
             "data": times,
             "boundaryGap": False
         },
-        "yAxis": {
-            "type": "value",
-            "scale": True,  # 지수 범위에 맞춰 Y축 최솟값 자동 조절
-            "splitLine": {"show": True}
-        },
+        "yAxis": [
+            {"name": "KOSPI", "type": "value", "scale": True},
+            {"name": "KOSDAQ", "type": "value", "scale": True}
+        ],
         "series": [
             {
-                "data": values,
+                "name": "KOSPI",
                 "type": "line",
+                "data": kospi_values,
                 "smooth": True,
                 "showSymbol": False,
-                "areaStyle": {
-                    "color": "rgba(0, 128, 255, 0.1)"
-                },
-                "lineStyle": {
-                    "width": 2,
-                    "color": "#5470c6"
-                },
-                "animationDuration": 20000, # 시리즈별 애니메이션 지속 시간 (20초)
-                "animationEasing": "linear"    # 일정한 속도로 그려지도록 선형(linear) 적용
+                "lineStyle": {"width": 3, "color": "#5470c6"},
+                # 애니메이션 핵심 설정
+                "animationDuration": 15000,
+                "animationEasing": "linear",
+                # 각 포인트가 그려지는 딜레이를 계산하여 '그려지는' 효과 생성
+                "animationDelay": "function (idx) { return idx * 30; }"
+            },
+            {
+                "name": "KOSDAQ",
+                "type": "line",
+                "yAxisIndex": 1, # KOSDAQ은 오른쪽 Y축 기준 (지수 폭이 다르므로)
+                "data": kosdaq_values,
+                "smooth": True,
+                "showSymbol": False,
+                "lineStyle": {"width": 3, "color": "#91cc75"},
+                "animationDuration": 15000,
+                "animationEasing": "linear",
+                "animationDelay": "function (idx) { return idx * 30; }"
             }
-        ],
-        "grid": {
-            "left": "3%",
-            "right": "4%",
-            "bottom": "3%",
-            "containLabel": True
-        }
+        ]
     }
 
     # 차트 렌더링
-    st_echarts(options=options, height="500px")
+    st_echarts(options=options, height="600px")
     
-    # 상세 데이터 테이블 (선택사항)
-    with st.expander("실시간 데이터 상세 보기"):
-        st.dataframe(df[['thistime', 'nowVal', 'changeVal', 'changeRate', 'quant']].rename(columns={
-            'thistime': '시간',
-            'nowVal': '현재가',
-            'changeVal': '변비',
-            'changeRate': '등락률',
-            'quant': '거래량'
-        }), use_container_width=True)
+    # 하단 정보
+    if not df_kospi.empty:
+        curr_kospi = df_kospi.iloc[-1]
+        st.metric("KOSPI 현재가", f"{float(curr_kospi['nowVal']):,.2f}", f"{curr_kospi['changeVal']} ({curr_kospi['changeRate']}%)")
+    
+    if not df_kosdaq.empty:
+        curr_kosdaq = df_kosdaq.iloc[-1]
+        st.metric("KOSDAQ 현재가", f"{float(curr_kosdaq['nowVal']):,.2f}", f"{curr_kosdaq['changeVal']} ({curr_kosdaq['changeRate']}%)", delta_color="normal")
 
 if __name__ == "__main__":
     main()
