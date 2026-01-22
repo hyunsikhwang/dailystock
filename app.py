@@ -7,7 +7,7 @@ from datetime import datetime, time, timedelta
 import pytz
 
 # 페이지 설정
-st.set_page_config(page_title="KOSPI & KOSDAQ Line Race", layout="wide")
+st.set_page_config(page_title="KOSPI & KOSDAQ 실시간 지수", layout="wide")
 
 def get_today_str():
     """한국 시간 기준 오늘 날짜를 YYYYMMDD 형식으로 반환"""
@@ -17,7 +17,6 @@ def get_today_str():
 
 def fetch_index_data(index_type, today_str):
     """네이버 증권 API를 통해 특정 지수(KOSPI/KOSDAQ) 데이터를 가져옴"""
-    # pageSize를 충분히 크게 설정 (500)
     url = f"https://stock.naver.com/api/domestic/indexSise/time?koreaIndexType={index_type}&thistime={today_str}&startIdx=0&pageSize=500"
     try:
         response = requests.get(url)
@@ -54,7 +53,7 @@ def generate_full_timeline():
     return timeline
 
 def main():
-    st.title("🏃‍♂️ KOSPI & KOSDAQ 지수 실시간 레이스")
+    st.title("🏃‍♂️ KOSPI & KOSDAQ 실시간 지수")
     
     today_str = get_today_str()
     st.write(f"기준 날짜: {today_str} (한국 시간)")
@@ -74,7 +73,6 @@ def main():
     # 데이터 가공
     def process_df(df, name):
         if df.empty: return pd.DataFrame(columns=['time_hm', name])
-        # API는 최신순이므로 전처리를 위해 시간 추출
         df['time_hm'] = df['thistime'].apply(lambda x: f"{x[8:10]}:{x[10:12]}")
         return df[['time_hm', 'nowVal']].rename(columns={'nowVal': name})
 
@@ -92,16 +90,17 @@ def main():
     col1, col2 = st.columns(2)
     with col1:
         if not df_kospi.empty:
-            # API 응답의 0번 인덱스가 보통 가장 최신 데이터임
             curr = df_kospi.iloc[0]
-            st.metric("KOSPI", f"{float(curr['nowVal']):,.2f}", f"{curr['changeVal']} ({curr['changeRate']}%)")
+            st.metric("KOSPI 현재가", f"{float(curr['nowVal']):,.2f}", f"{curr['changeVal']} ({curr['changeRate']}%)")
     with col2:
         if not df_kosdaq.empty:
             curr = df_kosdaq.iloc[0]
-            st.metric("KOSDAQ", f"{float(curr['nowVal']):,.2f}", f"{curr['changeVal']} ({curr_kosdaq['changeRate'] if 'curr_kosdaq' in locals() else curr['changeRate']}%)")
+            st.metric("KOSDAQ 현재가", f"{float(curr['nowVal']):,.2f}", f"{curr['changeVal']} ({curr['changeRate']}%)")
 
+    # ECharts 옵션 설정
+    options = {
         "animation": True,
-        "animationDuration": 1000, # 기본 애니메이션 지속 시간
+        "animationDuration": 1000,
         "animationThreshold": 2000,
         "title": {"text": "지수 실시간 추이"},
         "tooltip": {
@@ -163,9 +162,10 @@ def main():
                 "emphasis": {"focus": "series"}
             }
         ]
+    }
 
-    # 차트 렌더링 (인스턴스 재생성을 위해 키를 고정하거나 필요시 변경)
-    st_echarts(options=options, height="600px", key="line_race_chart_fixed_final")
+    # 차트 렌더링
+    st_echarts(options=options, height="600px", key="kospi_kosdaq_line_chart")
 
 if __name__ == "__main__":
     main()
