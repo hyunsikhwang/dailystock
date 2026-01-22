@@ -134,13 +134,13 @@ def main():
                 "data": kospi_values,
                 "smooth": True,
                 "showSymbol": False,
-                "lineStyle": {"width": 1.5, "color": "#5470c6"},
+                "lineStyle": {"width": 1.5, "color": "#3b82f6"}, # 현대적인 블색
                 "endLabel": {
                     "show": True,
                     "formatter": "KOSPI: {c}",
                     "offset": [10, 0],
                     "fontWeight": "bold",
-                    "color": "#5470c6"
+                    "color": "#3b82f6"
                 },
                 "emphasis": {"focus": "series"}
             },
@@ -151,13 +151,13 @@ def main():
                 "data": kosdaq_values,
                 "smooth": True,
                 "showSymbol": False,
-                "lineStyle": {"width": 1.5, "color": "#91cc75"},
+                "lineStyle": {"width": 1.5, "color": "#10b981"}, # 세련된 에메랄드 그린
                 "endLabel": {
                     "show": True,
                     "formatter": "KOSDAQ: {c}",
                     "offset": [10, 0],
                     "fontWeight": "bold",
-                    "color": "#91cc75"
+                    "color": "#10b981"
                 },
                 "emphasis": {"focus": "series"}
             }
