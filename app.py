@@ -51,6 +51,9 @@ def main():
 
     # ECharts 옵션 설정
     options = {
+        "animation": True,
+        "animationDuration": 20000,
+        "animationEasing": "linear",
         "title": {"text": "KOSPI 분단위 지수"},
         "tooltip": {
             "trigger": "axis",
@@ -79,8 +82,8 @@ def main():
                     "width": 2,
                     "color": "#5470c6"
                 },
-                "animationDuration": 10000, # 애니메이션 지속 시간 (10초로 연장)
-                "animationEasing": "cubicInOut"
+                "animationDuration": 20000, # 시리즈별 애니메이션 지속 시간 (20초)
+                "animationEasing": "linear"    # 일정한 속도로 그려지도록 선형(linear) 적용
             }
         ],
         "grid": {
