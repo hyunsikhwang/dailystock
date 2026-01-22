@@ -11,12 +11,6 @@ import pytz
 # 페이지 설정
 st.set_page_config(page_title="KOSPI & KOSDAQ 실시간 지수", layout="wide")
 
-def get_today_str():
-    """한국 시간 기준 오늘 날짜를 YYYYMMDD 형식으로 반환"""
-    seoul_tz = pytz.timezone('Asia/Seoul')
-    now = datetime.now(seoul_tz)
-    return now.strftime('%Y%m%d')
-
 def fetch_index_data(index_type, today_str):
     """네이버 증권 API를 통해 특정 지수(KOSPI/KOSDAQ) 데이터를 가져옴"""
     url = f"https://stock.naver.com/api/domestic/indexSise/time?koreaIndexType={index_type}&thistime={today_str}&startIdx=0&pageSize=500"
@@ -30,6 +24,31 @@ def fetch_index_data(index_type, today_str):
     except Exception as e:
         st.error(f"{index_type} 데이터를 가져오는 중 오류 발생: {e}")
         return pd.DataFrame()
+
+def get_valid_data(start_date):
+    """
+    선택된 날짜부터 시작하여 데이터가 있는 가장 최근 평일의 데이터를 찾습니다.
+    (주말 제외, 최대 10일 검색)
+    """
+    current_date = start_date
+    for _ in range(10): # 최대 10일 전까지 검색
+        # 주말 체크 (5: 토요일, 6: 일요일)
+        if current_date.weekday() >= 5:
+            current_date -= timedelta(days=1)
+            continue
+
+        date_str = current_date.strftime('%Y%m%d')
+        df_kospi = fetch_index_data("KOSPI", date_str)
+        df_kosdaq = fetch_index_data("KOSDAQ", date_str)
+
+        # 데이터가 하나라도 있으면 유효한 날짜로 간주
+        if not df_kospi.empty or not df_kosdaq.empty:
+            return df_kospi, df_kosdaq, date_str
+
+        # 데이터가 없으면 하루 전으로 이동
+        current_date -= timedelta(days=1)
+
+    return pd.DataFrame(), pd.DataFrame(), None
 
 def clean_value(val):
     """값을 float으로 변환하되, NaN/None 시 None 반환"""
@@ -94,16 +113,24 @@ def get_extrema_info(timeline, values):
 def main():
     st.title("🏃‍♂️ KOSPI & KOSDAQ 실시간 지수")
     
-    today_str = get_today_str()
-    st.write(f"기준 날짜: {today_str} (한국 시간)")
+    # 날짜 선택 기능 추가
+    seoul_tz = pytz.timezone('Asia/Seoul')
+    today = datetime.now(seoul_tz).date()
+
+    selected_date = st.date_input("날짜 선택", today)
 
     with st.spinner('데이터를 불러오고 있습니다...'):
-        df_kospi = fetch_index_data("KOSPI", today_str)
-        df_kosdaq = fetch_index_data("KOSDAQ", today_str)
+        df_kospi, df_kosdaq, actual_date_str = get_valid_data(selected_date)
 
     if df_kospi.empty and df_kosdaq.empty:
-        st.info("📌 현재는 주가 정보가 없습니다. (휴장일이거나 데이터 로딩 실패)")
+        st.info("📌 선택한 날짜 및 이전 평일에 대한 주가 정보가 없습니다.")
         return
+
+    # 날짜 표시 로직 개선
+    display_msg = f"기준 날짜: {actual_date_str} (한국 시간)"
+    if actual_date_str != selected_date.strftime('%Y%m%d'):
+         st.warning(f"선택한 날짜 ({selected_date})에 데이터가 없어, 가장 최근 데이터가 있는 날짜 ({actual_date_str})로 조회합니다.")
+    st.write(display_msg)
 
     # 전체 타임라인 생성 및 데이터 병합
     full_timeline = generate_full_timeline()
