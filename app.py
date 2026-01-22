@@ -79,7 +79,7 @@ def main():
                     "width": 2,
                     "color": "#5470c6"
                 },
-                "animationDuration": 3000, # 애니메이션 지속 시간 (3초)
+                "animationDuration": 10000, # 애니메이션 지속 시간 (10초로 연장)
                 "animationEasing": "cubicInOut"
             }
         ],
