@@ -165,7 +165,7 @@ def main():
     }
 
     # 차트 렌더링
-    st_echarts(options=options, height="600px", key="kospi_kosdaq_line_chart")
+    st_echarts(options=options, height="300px", key="kospi_kosdaq_line_chart")
 
 if __name__ == "__main__":
     main()
