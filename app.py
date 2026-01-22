@@ -1,11 +1,10 @@
 import streamlit as st
-from streamlit_echarts import st_echarts, JsCode
+from streamlit_echarts import st_echarts
 import requests
 import pandas as pd
 import numpy as np
 from datetime import datetime
 import pytz
-import json
 
 # 페이지 설정
 st.set_page_config(page_title="KOSPI & KOSDAQ 실시간 차트", layout="wide")
@@ -32,20 +31,20 @@ def fetch_index_data(index_type, today_str):
         st.error(f"{index_type} 데이터를 가져오는 중 오류 발생: {e}")
         return pd.DataFrame()
 
-def clean_float_value(val):
-    """값을 float으로 변환하되, NaN/None/오류 시 None(JSON null) 반환"""
+def clean_value(val):
+    """값을 float으로 변환하되, NaN/None 시 None 반환 (JSON null 호환)"""
     try:
         if val is None:
             return None
         f_val = float(val)
-        if np.isnan(f_val) or np.isinf(f_val):
+        if not np.isfinite(f_val):
             return None
         return f_val
-    except (ValueError, TypeError):
+    except:
         return None
 
 def main():
-    st.title("📊 KOSPI & KOSDAQ 실시간 지수 (슬로우 애니메이션)")
+    st.title("📊 KOSPI & KOSDAQ 실시간 지수")
     
     today_str = get_today_str()
     st.write(f"기준 날짜: {today_str} (한국 시간)")
@@ -66,19 +65,12 @@ def main():
         how='outer'
     ).sort_values('thistime')
 
-    # 데이터 정제 (NaN을 None으로 변환하여 JSON 에러 방지)
-    times = []
-    for x in merged['thistime']:
-        s_x = str(x)
-        if len(s_x) >= 12:
-            times.append(f"{s_x[8:10]}:{s_x[10:12]}")
-        else:
-            times.append("")
-            
-    kospi_values = [clean_float_value(v) for v in merged['KOSPI']]
-    kosdaq_values = [clean_float_value(v) for v in merged['KOSDAQ']]
+    # 데이터 정제
+    times = [f"{str(x)[8:10]}:{str(x)[10:12]}" for x in merged['thistime']]
+    kospi_values = [clean_value(v) for v in merged['KOSPI']]
+    kosdaq_values = [clean_value(v) for v in merged['KOSDAQ']]
 
-    # 상단 지표 영역 (가로 배치)
+    # 상단 지표 영역
     col1, col2 = st.columns(2)
     with col1:
         if not df_kospi.empty:
@@ -90,16 +82,15 @@ def main():
             st.metric("KOSDAQ 현재가", f"{float(curr_kosdaq['nowVal']):,.2f}", f"{curr_kosdaq['changeVal']} ({curr_kosdaq['changeRate']}%)")
 
     # ECharts 옵션 설정
-    # JsCode를 사용하지 않고도 애니메이션 속도를 조절할 수 있도록 설정을 보강합니다.
-    # 만약 JsCode가 문제라면 이 부분이 원인일 수 있으므로, 이번에는 JsCode 없이 구현해봅니다.
-    # ECharts v5부터는 animationDelay를 함수 없이 숫자로 주면 전체 딜레이만 조절되므로, 
-    # 정말 천천히 그리려면 JsCode가 필요합니다. 하지만 일단 JSON 에러 해결을 위해 구성을 최적화합니다.
+    # JsCode 직렬화 오류를 피하기 위해 JsCode를 제거하고 
+    # 대신 animationDuration을 아주 길게(30초) 설정하며, 
+    # animationThreshold를 0으로 설정하여 무조건 애니메이션이 작동하게 강제합니다.
     options = {
         "animation": True,
-        "animationDuration": 15000,
+        "animationDuration": 25000,
         "animationEasing": "linear",
-        "animationThreshold": 5000,
-        "title": {"text": "실시간 지수 추이 (순차 애니메이션)"},
+        "animationThreshold": 0, # 데이터 양에 상관없이 항상 애니메이션 적용
+        "title": {"text": "실시간 지수 추이 (천천히 그리기)"},
         "tooltip": {
             "trigger": "axis",
             "axisPointer": {"type": "cross"}
@@ -123,8 +114,8 @@ def main():
                 "smooth": True,
                 "showSymbol": False,
                 "lineStyle": {"width": 3, "color": "#5470c6"},
-                "animationDuration": 15000,
-                "animationDelay": JsCode("function (idx) { return idx * 30; }")
+                "animationDuration": 25000,
+                "animationEasing": "linear"
             },
             {
                 "name": "KOSDAQ",
@@ -134,21 +125,14 @@ def main():
                 "smooth": True,
                 "showSymbol": False,
                 "lineStyle": {"width": 3, "color": "#91cc75"},
-                "animationDuration": 15000,
-                "animationDelay": JsCode("function (idx) { return idx * 30; }")
+                "animationDuration": 25000,
+                "animationEasing": "linear"
             }
         ]
     }
 
     # 차트 렌더링
-    try:
-        st_echarts(options=options, height="600px", key="kospi_kosdaq_chart")
-    except Exception as e:
-        st.error(f"차트를 표시하는 중 오류가 발생했습니다. 데이터 구조를 확인해 주세요. ({e})")
-        # 디버깅용 데이터 출력 (접어둠)
-        with st.expander("디버깅 데이터 정보"):
-            st.write("데이터 샘플 (KOSPI):", kospi_values[:10])
-            st.write("데이터 샘플 (Times):", times[:10])
+    st_echarts(options=options, height="600px", key="kospi_kosdaq_chart_final")
 
 if __name__ == "__main__":
     main()
