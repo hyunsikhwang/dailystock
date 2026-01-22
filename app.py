@@ -139,6 +139,13 @@ def main():
             symbol="none",
             linestyle_opts=opts.LineStyleOpts(width=1.5, color="#3b82f6"),
             label_opts=opts.LabelOpts(is_show=False),
+            # 최고/최저점 표시 추가
+            markpoint_opts=opts.MarkPointOpts(
+                data=[
+                    opts.MarkPointItem(type_="max", name="최고점", itemstyle_opts=opts.ItemStyleOpts(color="#ef4444")),
+                    opts.MarkPointItem(type_="min", name="최저점", itemstyle_opts=opts.ItemStyleOpts(color="#3b82f6")),
+                ]
+            ),
         )
         .add_yaxis(
             series_name="KOSDAQ",
@@ -148,6 +155,13 @@ def main():
             symbol="none",
             linestyle_opts=opts.LineStyleOpts(width=1.5, color="#10b981"),
             label_opts=opts.LabelOpts(is_show=False),
+            # 최고/최저점 표시 추가
+            markpoint_opts=opts.MarkPointOpts(
+                data=[
+                    opts.MarkPointItem(type_="max", name="최고점", itemstyle_opts=opts.ItemStyleOpts(color="#ef4444")),
+                    opts.MarkPointItem(type_="min", name="최저점", itemstyle_opts=opts.ItemStyleOpts(color="#2563eb")),
+                ]
+            ),
         )
         .extend_axis(
             yaxis=opts.AxisOpts(
