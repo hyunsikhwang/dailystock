@@ -100,7 +100,7 @@ def main():
     # ECharts 옵션 설정
     options = {
         "animation": True,
-        "animationDuration": 1000,
+        "animationDuration": 10000,
         "animationThreshold": 2000,
         "title": {"text": "지수 실시간 추이"},
         "tooltip": {
