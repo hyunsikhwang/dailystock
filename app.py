@@ -110,17 +110,21 @@ def main():
         ]
     }
 
+    # 상단 지표 영역 (가로 배치)
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        if not df_kospi.empty:
+            curr_kospi = df_kospi.iloc[-1]
+            st.metric("KOSPI 현재가", f"{float(curr_kospi['nowVal']):,.2f}", f"{curr_kospi['changeVal']} ({curr_kospi['changeRate']}%)")
+    
+    with col2:
+        if not df_kosdaq.empty:
+            curr_kosdaq = df_kosdaq.iloc[-1]
+            st.metric("KOSDAQ 현재가", f"{float(curr_kosdaq['nowVal']):,.2f}", f"{curr_kosdaq['changeVal']} ({curr_kosdaq['changeRate']}%)")
+
     # 차트 렌더링
     st_echarts(options=options, height="600px")
-    
-    # 하단 정보
-    if not df_kospi.empty:
-        curr_kospi = df_kospi.iloc[-1]
-        st.metric("KOSPI 현재가", f"{float(curr_kospi['nowVal']):,.2f}", f"{curr_kospi['changeVal']} ({curr_kospi['changeRate']}%)")
-    
-    if not df_kosdaq.empty:
-        curr_kosdaq = df_kosdaq.iloc[-1]
-        st.metric("KOSDAQ 현재가", f"{float(curr_kosdaq['nowVal']):,.2f}", f"{curr_kosdaq['changeVal']} ({curr_kosdaq['changeRate']}%)", delta_color="normal")
 
 if __name__ == "__main__":
     main()
