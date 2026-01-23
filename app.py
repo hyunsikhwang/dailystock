@@ -242,7 +242,7 @@ def update_dashboard(selected_date):
     line.options["series"][0]["labelLayout"] = {"moveOverlap": "shiftY"}
     line.options["series"][1]["labelLayout"] = {"moveOverlap": "shiftY"}
 
-    st_pyecharts(line, height="300px")
+    st_pyecharts(line, height="500px")
 
 def main():
     st.title("🏃‍♂️ KOSPI & KOSDAQ 실시간 지수")
