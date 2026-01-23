@@ -165,7 +165,7 @@ def update_dashboard(selected_date):
 
     # pyecharts 차트 구성 (마커 제거 버전)
     line = (
-        Line(init_opts=opts.InitOpts(height="300px", width="100%"))
+        Line(init_opts=opts.InitOpts(height="500px", width="100%"))
         .add_xaxis(xaxis_data=full_timeline)
         .add_yaxis(
             series_name="KOSPI",
