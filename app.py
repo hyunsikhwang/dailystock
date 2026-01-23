@@ -110,15 +110,8 @@ def get_extrema_info(timeline, values):
     
     return max_item, min_item
 
-def main():
-    st.title("🏃‍♂️ KOSPI & KOSDAQ 실시간 지수")
-    
-    # 날짜 선택 기능 추가
-    seoul_tz = pytz.timezone('Asia/Seoul')
-    today = datetime.now(seoul_tz).date()
-
-    selected_date = st.date_input("날짜 선택", today)
-
+@st.fragment(run_every=60)
+def update_dashboard(selected_date):
     with st.spinner('데이터를 불러오고 있습니다...'):
         df_kospi, df_kosdaq, actual_date_str = get_valid_data(selected_date)
 
@@ -250,6 +243,17 @@ def main():
     line.options["series"][1]["labelLayout"] = {"moveOverlap": "shiftY"}
 
     st_pyecharts(line, height="300px")
+
+def main():
+    st.title("🏃‍♂️ KOSPI & KOSDAQ 실시간 지수")
+
+    # 날짜 선택 기능 추가
+    seoul_tz = pytz.timezone('Asia/Seoul')
+    today = datetime.now(seoul_tz).date()
+
+    selected_date = st.date_input("날짜 선택", today)
+
+    update_dashboard(selected_date)
 
 if __name__ == "__main__":
     main()
