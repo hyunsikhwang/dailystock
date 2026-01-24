@@ -9,7 +9,70 @@ from datetime import datetime, time, timedelta
 import pytz
 
 # 페이지 설정
-st.set_page_config(page_title="KOSPI & KOSDAQ 실시간 지수", layout="wide")
+st.set_page_config(
+    page_title="KOSPI & KOSDAQ 실시간 지수",
+    page_icon="📈",
+    layout="wide",
+    initial_sidebar_state="collapsed"
+)
+
+# Custom CSS for Light Mode, Stability, and Refinement (Value Horizon Style)
+st.markdown("""
+<style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
+
+    /* Minimize Streamlit Padding and Margins */
+    .block-container {
+        padding-top: 1rem !important;
+        padding-bottom: 0rem !important;
+        max-width: 1000px !important;
+    }
+    
+    [data-testid="stHeader"] {
+        display: none;
+    }
+
+    /* Global Light Mode Styles */
+    .stApp {
+        background-color: #ffffff;
+        color: #1a1a1a;
+        font-family: 'Inter', sans-serif;
+    }
+
+    /* Hero Section - Compact */
+    .hero-container {
+        padding: 1.5rem 0;
+        text-align: center;
+        border-bottom: 1px solid #f0f0f0;
+        margin-bottom: 2rem;
+    }
+
+    .hero-title {
+        font-size: 2.2rem;
+        font-weight: 700;
+        color: #111111;
+        margin-bottom: 0.25rem;
+        letter-spacing: -0.5px;
+    }
+
+    .hero-subtitle {
+        font-size: 0.95rem;
+        font-weight: 400;
+        color: #888888;
+    }
+
+    /* Hide Streamlit components */
+    #MainMenu, footer, header, .stDeployButton {
+        display: none !important;
+    }
+
+    /* Metric Styling */
+    [data-testid="stMetricValue"] {
+        font-size: 1.8rem !important;
+        font-weight: 700 !important;
+    }
+</style>
+""", unsafe_allow_html=True)
 
 def fetch_index_data(index_type, today_str):
     """네이버 증권 API를 통해 특정 지수(KOSPI/KOSDAQ) 데이터를 가져옴"""
@@ -197,12 +260,15 @@ def update_dashboard(selected_date):
             )
         )
         .set_global_opts(
-            title_opts=opts.TitleOpts(title="지수 실시간 추이"),
+            title_opts=opts.TitleOpts(
+                title="지수 실시간 추이",
+                title_style_opts=opts.TextStyleOpts(font_family="Inter", font_size=16, font_weight="bold")
+            ),
             tooltip_opts=opts.TooltipOpts(trigger="axis", axis_pointer_type="line"),
             xaxis_opts=opts.AxisOpts(
                 type_="category",
                 boundary_gap=False,
-                axislabel_opts=opts.LabelOpts(interval=29), # 30분 단위 축 레이블 유지
+                axislabel_opts=opts.LabelOpts(interval=29, font_family="Inter"), # 30분 단위 축 레이블 유지
             ),
             yaxis_opts=opts.AxisOpts(
                 name="KOSPI",
@@ -211,8 +277,9 @@ def update_dashboard(selected_date):
                 max_=k_max_bound,
                 is_scale=True,
                 splitline_opts=opts.SplitLineOpts(is_show=True),
+                axislabel_opts=opts.LabelOpts(font_family="Inter"),
             ),
-            legend_opts=opts.LegendOpts(pos_top="5%"),
+            legend_opts=opts.LegendOpts(pos_top="5%", textstyle_opts=opts.TextStyleOpts(font_family="Inter")),
         )
     )
     
@@ -245,13 +312,21 @@ def update_dashboard(selected_date):
     st_pyecharts(line, height="500px")
 
 def main():
-    st.title("🏃‍♂️ KOSPI & KOSDAQ 실시간 지수")
+    # Hero Section
+    st.markdown(f"""
+    <div class="hero-container">
+        <div class="hero-title">Daily K-Stock</div>
+        <div class="hero-subtitle">대한민국 주식 시장 트렌드에 대한 일일 인사이트 및 분석</div>
+    </div>
+    """, unsafe_allow_html=True)
 
-    # 날짜 선택 기능 추가
+    # 날짜 선택 기능 추가 (상단 배치)
     seoul_tz = pytz.timezone('Asia/Seoul')
     today = datetime.now(seoul_tz).date()
 
-    selected_date = st.date_input("날짜 선택", today)
+    col_date, col_empty = st.columns([1, 3])
+    with col_date:
+        selected_date = st.date_input("📅 날짜 선택", today)
 
     update_dashboard(selected_date)
 
