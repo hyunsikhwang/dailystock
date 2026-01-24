@@ -262,7 +262,7 @@ def update_dashboard(selected_date):
         .set_global_opts(
             title_opts=opts.TitleOpts(
                 title="지수 실시간 추이",
-                title_style_opts=opts.TextStyleOpts(font_family="Inter", font_size=16, font_weight="bold")
+                title_textstyle_opts=opts.TextStyleOpts(font_family="Inter", font_size=16, font_weight="bold")
             ),
             tooltip_opts=opts.TooltipOpts(trigger="axis", axis_pointer_type="line"),
             xaxis_opts=opts.AxisOpts(
