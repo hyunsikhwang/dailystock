@@ -216,7 +216,7 @@ def update_dashboard(selected_date):
     q_min_bound, q_max_bound = calculate_y_axis_bounds(kosdaq_nums)
 
     # 상단 지표 (Custom Metric)
-    def render_custom_metric(label, value, change_val, change_rate):
+    def render_custom_metric(label, value, change_val, change_rate, max_info, min_info):
         try:
             val_num = float(str(change_val).replace(',', ''))
             is_up = val_num > 0
@@ -231,6 +231,20 @@ def update_dashboard(selected_date):
             color = "#64748b"
             icon = "-"
         
+        # Extrema HTML
+        extrema_html = ""
+        if max_info and min_info:
+            extrema_html = f"""
+            <div style="display: flex; justify-content: space-between; margin-top: 0.75rem; padding-top: 0.75rem; border-top: 1px solid #e2e8f0; font-size: 0.8rem;">
+                <div style="color: #64748b;">
+                    <span style="color: #ef4444; font-weight: 600;">최고</span> {max_info[1]:,.2f} <span style="font-size: 0.75rem; opacity: 0.8;">({max_info[0]})</span>
+                </div>
+                <div style="color: #64748b;">
+                    <span style="color: #3b82f6; font-weight: 600;">최저</span> {min_info[1]:,.2f} <span style="font-size: 0.75rem; opacity: 0.8;">({min_info[0]})</span>
+                </div>
+            </div>
+            """
+
         st.markdown(f"""
             <div style="background-color: #f8fafc; padding: 1rem; border-radius: 12px; border: 1px solid #f1f5f9; margin-bottom: 1rem;">
                 <div style="font-size: 0.85rem; font-weight: 600; color: #64748b; margin-bottom: 0.25rem;">{label}</div>
@@ -238,18 +252,18 @@ def update_dashboard(selected_date):
                 <div style="font-size: 1rem; font-weight: 600; color: {color}; margin-top: 0.25rem;">
                     {icon} {change_val} ({change_rate}%)
                 </div>
+                {extrema_html}
             </div>
         """, unsafe_allow_html=True)
 
-    col1, col2 = st.columns(2)
     with col1:
         if not df_kospi.empty:
             curr = df_kospi.sort_values('thistime', ascending=False).iloc[0]
-            render_custom_metric("KOSPI 현재가", f"{float(curr['nowVal']):,.2f}", curr['changeVal'], curr['changeRate'])
+            render_custom_metric("KOSPI 현재가", f"{float(curr['nowVal']):,.2f}", curr['changeVal'], curr['changeRate'], k_max_info, k_min_info)
     with col2:
         if not df_kosdaq.empty:
             curr = df_kosdaq.sort_values('thistime', ascending=False).iloc[0]
-            render_custom_metric("KOSDAQ 현재가", f"{float(curr['nowVal']):,.2f}", curr['changeVal'], curr['changeRate'])
+            render_custom_metric("KOSDAQ 현재가", f"{float(curr['nowVal']):,.2f}", curr['changeVal'], curr['changeRate'], q_max_info, q_min_info)
 
     # pyecharts 차트 구성 (마커 제거 버전)
     line = (
