@@ -256,6 +256,7 @@ def update_dashboard(selected_date):
             </div>
         """, unsafe_allow_html=True)
 
+    col1, col2 = st.columns(2)
     with col1:
         if not df_kospi.empty:
             curr = df_kospi.sort_values('thistime', ascending=False).iloc[0]
