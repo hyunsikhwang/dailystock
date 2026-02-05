@@ -71,6 +71,24 @@ st.markdown("""
         font-size: 1.8rem !important;
         font-weight: 700 !important;
     }
+
+    /* Custom Button Styling */
+    .stButton > button {
+        font-size: 0.85rem !important;
+        height: 2.5rem !important;
+        margin-top: 2rem !important;
+        padding: 0 1rem !important;
+        background-color: #f8fafc !important;
+        color: #64748b !important;
+        border: 1px solid #e2e8f0 !important;
+        transition: all 0.2s ease;
+    }
+    
+    .stButton > button:hover {
+        background-color: #f1f5f9 !important;
+        color: #0f172a !important;
+        border-color: #cbd5e1 !important;
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -368,7 +386,7 @@ def main():
     if 'selected_date' not in st.session_state:
         st.session_state.selected_date = today
 
-    col_date, col_btn, col_empty = st.columns([1.5, 0.5, 5])
+    col_date, col_btn, col_empty = st.columns([2, 1, 7])
     
     with col_date:
         # date_input의 값을 session_state와 연동
@@ -379,8 +397,6 @@ def main():
             st.rerun()
 
     with col_btn:
-        st.write("") # 간격 맞추기용
-        st.write("") 
         if st.button("오늘", use_container_width=True):
             if st.session_state.selected_date != today:
                 st.session_state.selected_date = today
