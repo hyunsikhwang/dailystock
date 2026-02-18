@@ -157,11 +157,32 @@ def fetch_krx_futures_by_date(bas_dd, auth_key):
     payload = response.json()
     return extract_rows_from_krx_payload(payload)
 
-def parse_yyyymm_from_isu_name(isu_name):
-    match = re.search(r"(20\d{2})(0[1-9]|1[0-2])", str(isu_name or ""))
-    if not match:
-        return None
-    return int(f"{match.group(1)}{match.group(2)}")
+def normalize_kr_text(value):
+    return re.sub(r"\s+", "", str(value or "")).strip()
+
+def parse_yyyymm_contract(value):
+    text = normalize_kr_text(value)
+
+    # 1) YYYYMM or YYYY-MM/ YYYY.MM
+    match = re.search(r"(20\d{2})[-./]?(0[1-9]|1[0-2])", text)
+    if match:
+        return int(f"{match.group(1)}{match.group(2)}")
+
+    # 2) YYMM (ex: 2603)
+    match = re.search(r"(?<!\d)(\d{2})(0[1-9]|1[0-2])(?!\d)", text)
+    if match:
+        return int(f"20{match.group(1)}{match.group(2)}")
+
+    # 3) YYYY년M월 / YY년M월
+    match = re.search(r"((?:20)?\d{2})년\s*([1-9]|1[0-2])월", text)
+    if match:
+        year = match.group(1)
+        if len(year) == 2:
+            year = f"20{year}"
+        month = int(match.group(2))
+        return int(f"{year}{month:02d}")
+
+    return None
 
 def normalize_bas_dd(value):
     digits = re.sub(r"\D", "", str(value or ""))
@@ -187,11 +208,21 @@ def select_latest_kospi_night_contract(rows):
     """코스피200 선물/야간 중 최신 월물 계약 선택"""
     candidates = []
     for row in rows:
-        if str(row.get("PROD_NM", "")).strip() != "코스피200 선물":
+        prod_nm = normalize_kr_text(row.get("PROD_NM"))
+        mkt_nm = normalize_kr_text(row.get("MKT_NM"))
+
+        # API별 표기 차이(공백/접미어)를 허용
+        if "코스피200선물" not in prod_nm:
             continue
-        if str(row.get("MKT_NM", "")).strip() != "야간":
+        if "야간" not in mkt_nm:
             continue
-        yyyymm = parse_yyyymm_from_isu_name(row.get("ISU_NM"))
+
+        # 월물은 ISU_NM 우선, 실패 시 ISU_CD/ISU_SRT_CD로 보완
+        yyyymm = (
+            parse_yyyymm_contract(row.get("ISU_NM"))
+            or parse_yyyymm_contract(row.get("ISU_CD"))
+            or parse_yyyymm_contract(row.get("ISU_SRT_CD"))
+        )
         if yyyymm is None:
             continue
         candidates.append((yyyymm, row))
