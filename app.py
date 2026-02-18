@@ -340,14 +340,12 @@ def build_kospi_night_candidates(rows):
         if "야간" not in mkt_nm:
             continue
 
-        # 월물은 ISU_NM 우선, 실패 시 ISU_CD/ISU_SRT_CD로 보완
-        yyyymm = (
-            parse_yyyymm_contract(row.get("ISU_NM"))
-            or parse_yyyymm_contract(row.get("ISU_CD"))
-            or parse_yyyymm_contract(row.get("ISU_SRT_CD"))
-        )
-        if yyyymm is None:
+        # 요구 조건: ISU_NM == "코스피200 F {YYYYMM} (야간)" 형식만 허용
+        isu_nm = str(row.get("ISU_NM") or "").strip()
+        match = re.match(r"^코스피200\s*F\s*(20\d{2})(0[1-9]|1[0-2])\s*\(야간\)$", isu_nm)
+        if not match:
             continue
+        yyyymm = int(f"{match.group(1)}{match.group(2)}")
         candidates.append((yyyymm, row))
     return candidates
 
