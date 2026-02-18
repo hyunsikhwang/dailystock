@@ -7,6 +7,7 @@ import pandas as pd
 import numpy as np
 from datetime import datetime, time, timedelta
 import pytz
+import re
 
 # 페이지 설정
 st.set_page_config(
@@ -105,6 +106,132 @@ def fetch_index_data(index_type, today_str):
     except Exception as e:
         st.error(f"{index_type} 데이터를 가져오는 중 오류 발생: {e}")
         return pd.DataFrame()
+
+def get_krx_auth_key():
+    """Streamlit secret에서 KRX AUTH_KEY를 안전하게 읽음"""
+    try:
+        auth_key = st.secrets.get("KRX_AUTH_KEY")
+    except Exception:
+        auth_key = None
+    if not auth_key:
+        return None, "KRX_AUTH_KEY가 설정되지 않았습니다."
+    return str(auth_key), None
+
+def iter_basdd_candidates_kst():
+    """한국시간 기준 내일 포함 과거 10일까지(총 11일) YYYYMMDD 생성"""
+    seoul_tz = pytz.timezone('Asia/Seoul')
+    tomorrow = datetime.now(seoul_tz).date() + timedelta(days=1)
+    return [(tomorrow - timedelta(days=offset)).strftime("%Y%m%d") for offset in range(11)]
+
+def extract_rows_from_krx_payload(payload):
+    """KRX 응답에서 행 리스트를 방어적으로 추출"""
+    if isinstance(payload, list):
+        return [row for row in payload if isinstance(row, dict)]
+    if not isinstance(payload, dict):
+        return []
+
+    rows = []
+    preferred_keys = ["OutBlock_1", "output", "result", "data", "list"]
+    for key in preferred_keys:
+        val = payload.get(key)
+        if isinstance(val, list):
+            rows.extend([row for row in val if isinstance(row, dict)])
+
+    if rows:
+        return rows
+
+    for val in payload.values():
+        if isinstance(val, list):
+            rows.extend([row for row in val if isinstance(row, dict)])
+    return rows
+
+def fetch_krx_futures_by_date(bas_dd, auth_key):
+    """지정 기준일자 KRX 선물 데이터 조회"""
+    url = "https://data-dbg.krx.co.kr/svc/apis/drv/fut_bydd_trd.json"
+    response = requests.get(
+        url,
+        params={"AUTH_KEY": auth_key, "basDd": bas_dd},
+        timeout=10
+    )
+    response.raise_for_status()
+    payload = response.json()
+    return extract_rows_from_krx_payload(payload)
+
+def parse_yyyymm_from_isu_name(isu_name):
+    match = re.search(r"(20\d{2})(0[1-9]|1[0-2])", str(isu_name or ""))
+    if not match:
+        return None
+    return int(f"{match.group(1)}{match.group(2)}")
+
+def normalize_bas_dd(value):
+    digits = re.sub(r"\D", "", str(value or ""))
+    if len(digits) >= 8:
+        return int(digits[:8])
+    return 0
+
+def format_bas_dd(value):
+    digits = re.sub(r"\D", "", str(value or ""))
+    if len(digits) >= 8:
+        return f"{digits[:4]}-{digits[4:6]}-{digits[6:8]}"
+    return str(value) if value is not None else "-"
+
+def format_metric_number(value):
+    num = clean_value(value)
+    if num is None:
+        return "-" if value is None else str(value)
+    if float(num).is_integer():
+        return f"{int(num):,}"
+    return f"{num:,.2f}"
+
+def select_latest_kospi_night_contract(rows):
+    """코스피200 선물/야간 중 최신 월물 계약 선택"""
+    candidates = []
+    for row in rows:
+        if str(row.get("PROD_NM", "")).strip() != "코스피200 선물":
+            continue
+        if str(row.get("MKT_NM", "")).strip() != "야간":
+            continue
+        yyyymm = parse_yyyymm_from_isu_name(row.get("ISU_NM"))
+        if yyyymm is None:
+            continue
+        candidates.append((yyyymm, row))
+
+    if not candidates:
+        return None
+
+    latest_month = max(month for month, _ in candidates)
+    same_month_rows = [row for month, row in candidates if month == latest_month]
+    same_month_rows.sort(
+        key=lambda row: (
+            normalize_bas_dd(row.get("BAS_DD")),
+            str(row.get("ISU_NM", "")),
+        ),
+        reverse=True
+    )
+    return same_month_rows[0] if same_month_rows else None
+
+@st.cache_data(show_spinner=False, ttl=600)
+def get_latest_kospi_night_futures():
+    """최신 유효 코스피200 야간선물 데이터 1건 조회"""
+    auth_key, auth_msg = get_krx_auth_key()
+    if not auth_key:
+        return None, auth_msg
+
+    last_error = None
+    for bas_dd in iter_basdd_candidates_kst():
+        try:
+            rows = fetch_krx_futures_by_date(bas_dd, auth_key)
+        except Exception as e:
+            last_error = str(e)
+            continue
+
+        selected = select_latest_kospi_night_contract(rows)
+        if selected is not None:
+            return selected, None
+
+    if last_error:
+        return None, f"KRX API 호출 실패: {last_error}"
+    return None, "최근 10일(내일 기준) 내 야간 코스피200 선물 데이터가 없습니다."
 
 def get_valid_data(start_date):
     """
@@ -234,14 +361,15 @@ def update_dashboard(selected_date):
     q_min_bound, q_max_bound = calculate_y_axis_bounds(kosdaq_nums)
 
     # 상단 지표 (Custom Metric)
-    def render_custom_metric(label, value, change_val, change_rate, max_info, min_info):
+    def render_custom_metric(label, value, change_val, change_rate, max_info=None, min_info=None, extra_info=None):
         try:
             val_num = float(str(change_val).replace(',', ''))
             is_up = val_num > 0
             is_zero = val_num == 0
         except:
-            is_up = not str(change_val).startswith('-')
-            is_zero = "0" in str(change_val) and len(str(change_val)) == 1
+            change_text = str(change_val).strip()
+            is_up = not change_text.startswith('-')
+            is_zero = change_text in {"0", "0.0", "+0", "-0", "-"}
         
         color = "#ef4444" if is_up else "#3b82f6"
         icon = "▲" if is_up else "▼"
@@ -263,18 +391,36 @@ def update_dashboard(selected_date):
             </div>
             """
 
+        delta_text = "-"
+        if str(change_val).strip() not in {"", "-"}:
+            if change_rate in (None, "", "-"):
+                delta_text = f"{icon} {change_val}"
+            else:
+                delta_text = f"{icon} {change_val} ({change_rate}%)"
+
+        extra_html = ""
+        if extra_info:
+            extra_html = f"""
+            <div style="margin-top: 0.75rem; padding-top: 0.75rem; border-top: 1px solid #e2e8f0; font-size: 0.8rem; color: #64748b;">
+                {extra_info}
+            </div>
+            """
+
         st.markdown(f"""
             <div style="background-color: #f8fafc; padding: 1rem; border-radius: 12px; border: 1px solid #f1f5f9; margin-bottom: 1rem;">
                 <div style="font-size: 0.85rem; font-weight: 600; color: #64748b; margin-bottom: 0.25rem;">{label}</div>
                 <div style="font-size: 1.8rem; font-weight: 700; color: #0f172a;">{value}</div>
                 <div style="font-size: 1rem; font-weight: 600; color: {color}; margin-top: 0.25rem;">
-                    {icon} {change_val} ({change_rate}%)
+                    {delta_text}
                 </div>
                 {extrema_html}
+                {extra_html}
             </div>
         """, unsafe_allow_html=True)
 
-    col1, col2 = st.columns(2)
+    kospi_night_row, kospi_night_msg = get_latest_kospi_night_futures()
+
+    col1, col2, col3 = st.columns(3)
     with col1:
         if not df_kospi.empty:
             curr = df_kospi.sort_values('thistime', ascending=False).iloc[0]
@@ -283,6 +429,27 @@ def update_dashboard(selected_date):
         if not df_kosdaq.empty:
             curr = df_kosdaq.sort_values('thistime', ascending=False).iloc[0]
             render_custom_metric("KOSDAQ 현재가", f"{float(curr['nowVal']):,.2f}", curr['changeVal'], curr['changeRate'], q_max_info, q_min_info)
+    with col3:
+        if kospi_night_row:
+            bas_dd_text = format_bas_dd(kospi_night_row.get("BAS_DD"))
+            prod_nm = str(kospi_night_row.get("PROD_NM") or "-")
+            mkt_nm = str(kospi_night_row.get("MKT_NM") or "-")
+            extra = f"{bas_dd_text} | {prod_nm} | {mkt_nm}"
+            render_custom_metric(
+                "KOSPI 야간선물",
+                format_metric_number(kospi_night_row.get("TDD_CLSPRC")),
+                format_metric_number(kospi_night_row.get("CMPPREVDD_PRC")),
+                None,
+                extra_info=extra,
+            )
+        else:
+            render_custom_metric(
+                "KOSPI 야간선물",
+                "-",
+                "-",
+                None,
+                extra_info=kospi_night_msg or "데이터를 가져올 수 없습니다.",
+            )
 
     # pyecharts 차트 구성 (마커 제거 버전)
     line = (
