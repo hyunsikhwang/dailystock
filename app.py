@@ -631,7 +631,7 @@ def update_dashboard(selected_date):
             </div>
         """, unsafe_allow_html=True)
 
-    kospi_night_row, kospi_night_msg, kospi_night_debug_logs = get_latest_kospi_night_futures()
+    kospi_night_row, kospi_night_msg, _ = get_latest_kospi_night_futures()
 
     col1, col2, col3 = st.columns(3)
     with col1:
@@ -663,19 +663,6 @@ def update_dashboard(selected_date):
                 None,
                 extra_info=kospi_night_msg or "데이터를 가져올 수 없습니다.",
             )
-
-    # 임시 디버그 출력: 날짜별 KRX 호출 결과
-    if kospi_night_debug_logs:
-        with st.expander("KRX 야간선물 디버그(임시)"):
-            for item in kospi_night_debug_logs:
-                st.write(
-                    f"- basDd={item.get('bas_dd')} | status={item.get('status')} | "
-                    f"rows={item.get('rows')} | filtered={item.get('filtered')} | "
-                    f"current={item.get('current_yyyymm', '-')} | "
-                    f"candidates={item.get('candidate_months', '-')} | target={item.get('target_month', '-')} | "
-                    f"isu={item.get('selected_isu_nm', '-')} | close={item.get('selected_close', '-')} | "
-                    f"msg={item.get('message')}"
-                )
 
     # pyecharts 차트 구성 (마커 제거 버전)
     line = (
