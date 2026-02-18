@@ -212,7 +212,7 @@ def select_latest_kospi_night_contract(rows):
         mkt_nm = normalize_kr_text(row.get("MKT_NM"))
 
         # API별 표기 차이(공백/접미어)를 허용
-        if "코스피200선물" not in prod_nm:
+        if "코스피200 선물" not in prod_nm:
             continue
         if "야간" not in mkt_nm:
             continue
@@ -467,7 +467,7 @@ def update_dashboard(selected_date):
             mkt_nm = str(kospi_night_row.get("MKT_NM") or "-")
             extra = f"{bas_dd_text} | {prod_nm} | {mkt_nm}"
             render_custom_metric(
-                "KOSPI 야간선물",
+                "KOSPI 200 야간선물",
                 format_metric_number(kospi_night_row.get("TDD_CLSPRC")),
                 format_metric_number(kospi_night_row.get("CMPPREVDD_PRC")),
                 None,
@@ -475,7 +475,7 @@ def update_dashboard(selected_date):
             )
         else:
             render_custom_metric(
-                "KOSPI 야간선물",
+                "KOSPI 200 야간선물",
                 "-",
                 "-",
                 None,
