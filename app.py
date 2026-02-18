@@ -110,7 +110,12 @@ def fetch_index_data(index_type, today_str):
 def get_krx_auth_key():
     """Streamlit secret에서 KRX AUTH_KEY를 안전하게 읽음"""
     try:
-        auth_key = st.secrets.get("KRX_AUTH_KEY")
+        if "KRX_AUTH_KEY" in st.secrets:
+            auth_key = st.secrets["KRX_AUTH_KEY"]
+        elif "krx" in st.secrets and "auth_key" in st.secrets["krx"]:
+            auth_key = st.secrets["krx"]["auth_key"]
+        else:
+            auth_key = None
     except Exception:
         auth_key = None
     if not auth_key:
@@ -242,14 +247,10 @@ def select_latest_kospi_night_contract(rows):
     return same_month_rows[0] if same_month_rows else None
 
 @st.cache_data(show_spinner=False, ttl=600)
-def get_latest_kospi_night_futures():
-    """최신 유효 코스피200 야간선물 데이터 1건 조회"""
-    auth_key, auth_msg = get_krx_auth_key()
-    if not auth_key:
-        return None, auth_msg
-
+def _get_latest_kospi_night_futures_cached(auth_key, bas_dd_candidates):
+    """KRX AUTH_KEY와 기준일 후보에 종속된 캐시 조회"""
     last_error = None
-    for bas_dd in iter_basdd_candidates_kst():
+    for bas_dd in bas_dd_candidates:
         try:
             rows = fetch_krx_futures_by_date(bas_dd, auth_key)
         except Exception as e:
@@ -263,6 +264,14 @@ def get_latest_kospi_night_futures():
     if last_error:
         return None, f"KRX API 호출 실패: {last_error}"
     return None, "최근 10일(내일 기준) 내 야간 코스피200 선물 데이터가 없습니다."
+
+def get_latest_kospi_night_futures():
+    """최신 유효 코스피200 야간선물 데이터 1건 조회"""
+    auth_key, auth_msg = get_krx_auth_key()
+    if not auth_key:
+        return None, auth_msg
+    bas_dd_candidates = tuple(iter_basdd_candidates_kst())
+    return _get_latest_kospi_night_futures_cached(auth_key, bas_dd_candidates)
 
 def get_valid_data(start_date):
     """
