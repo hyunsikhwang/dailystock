@@ -219,8 +219,8 @@ def format_metric_number(value):
         return f"{int(num):,}"
     return f"{num:,.2f}"
 
-def select_latest_kospi_night_contract(rows):
-    """코스피200 선물/야간 중 현재 기준 최근(근접) 월물 계약 선택"""
+def build_kospi_night_candidates(rows):
+    """코스피200 선물/야간 후보에서 파싱 가능한 월물 목록 생성"""
     candidates = []
     for row in rows:
         prod_nm = normalize_kr_text(row.get("PROD_NM"))
@@ -241,6 +241,11 @@ def select_latest_kospi_night_contract(rows):
         if yyyymm is None:
             continue
         candidates.append((yyyymm, row))
+    return candidates
+
+def select_latest_kospi_night_contract(rows):
+    """코스피200 선물/야간 중 현재 기준 최근(근접) 월물 계약 선택"""
+    candidates = build_kospi_night_candidates(rows)
 
     if not candidates:
         return None
@@ -269,10 +274,11 @@ def select_latest_kospi_night_contract(rows):
     return same_month_rows[0] if same_month_rows else None
 
 @st.cache_data(show_spinner=False, ttl=600)
-def _get_latest_kospi_night_futures_cached(auth_key, bas_dd_candidates):
+def _get_latest_kospi_night_futures_cached(auth_key, bas_dd_candidates, debug_version):
     """KRX AUTH_KEY와 기준일 후보에 종속된 캐시 조회"""
     debug_logs = []
     last_error = None
+    current_yyyymm = get_current_yyyymm_kst()
     for bas_dd in bas_dd_candidates:
         try:
             rows = fetch_krx_futures_by_date(bas_dd, auth_key)
@@ -286,16 +292,26 @@ def _get_latest_kospi_night_futures_cached(auth_key, bas_dd_candidates):
                 "selected_isu_nm": "-",
                 "selected_close": "-",
                 "message": str(e),
+                "current_yyyymm": current_yyyymm,
+                "candidate_months": "-",
+                "target_month": "-",
             })
             continue
 
-        filtered_count = 0
-        for row in rows:
-            prod_nm = normalize_kr_text(row.get("PROD_NM"))
-            mkt_nm = normalize_kr_text(row.get("MKT_NM"))
-            if "코스피200선물" in prod_nm and "야간" in mkt_nm:
-                filtered_count += 1
-
+        candidates = build_kospi_night_candidates(rows)
+        filtered_count = len(candidates)
+        unique_months = sorted({month for month, _ in candidates})
+        target_month = "-"
+        if unique_months:
+            current_serial = yyyymm_to_serial(current_yyyymm)
+            target_month = min(
+                unique_months,
+                key=lambda month: (
+                    abs(yyyymm_to_serial(month) - current_serial),
+                    0 if yyyymm_to_serial(month) >= current_serial else 1,
+                    yyyymm_to_serial(month),
+                ),
+            )
         selected = select_latest_kospi_night_contract(rows)
         debug_logs.append({
             "bas_dd": bas_dd,
@@ -305,6 +321,9 @@ def _get_latest_kospi_night_futures_cached(auth_key, bas_dd_candidates):
             "selected_isu_nm": str(selected.get("ISU_NM")) if selected else "-",
             "selected_close": str(selected.get("TDD_CLSPRC")) if selected else "-",
             "message": "selected" if selected else "no-match",
+            "current_yyyymm": current_yyyymm,
+            "candidate_months": ",".join(str(m) for m in unique_months) if unique_months else "-",
+            "target_month": str(target_month),
         })
         if selected is not None:
             return selected, None, debug_logs
@@ -319,7 +338,7 @@ def get_latest_kospi_night_futures():
     if not auth_key:
         return None, auth_msg, []
     bas_dd_candidates = tuple(iter_basdd_candidates_kst())
-    return _get_latest_kospi_night_futures_cached(auth_key, bas_dd_candidates)
+    return _get_latest_kospi_night_futures_cached(auth_key, bas_dd_candidates, "debug-v2")
 
 def get_valid_data(start_date):
     """
@@ -546,6 +565,8 @@ def update_dashboard(selected_date):
                 st.write(
                     f"- basDd={item.get('bas_dd')} | status={item.get('status')} | "
                     f"rows={item.get('rows')} | filtered={item.get('filtered')} | "
+                    f"current={item.get('current_yyyymm', '-')} | "
+                    f"candidates={item.get('candidate_months', '-')} | target={item.get('target_month', '-')} | "
                     f"isu={item.get('selected_isu_nm', '-')} | close={item.get('selected_close', '-')} | "
                     f"msg={item.get('message')}"
                 )
