@@ -327,6 +327,16 @@ def format_metric_number(value):
         return f"{int(num):,}"
     return f"{num:,.2f}"
 
+def calculate_change_rate_from_close_and_delta(close_value, delta_value):
+    close_num = clean_value(close_value)
+    delta_num = clean_value(delta_value)
+    if close_num is None or delta_num is None:
+        return None
+    prev_close = close_num - delta_num
+    if prev_close == 0:
+        return None
+    return f"{(delta_num / prev_close) * 100:.2f}"
+
 def build_kospi_night_candidates(rows):
     """코스피200 선물/야간 후보에서 파싱 가능한 월물 목록 생성"""
     candidates = []
@@ -648,11 +658,15 @@ def update_dashboard(selected_date):
             prod_nm = str(kospi_night_row.get("PROD_NM") or "-")
             mkt_nm = str(kospi_night_row.get("MKT_NM") or "-")
             extra = f"{bas_dd_text} | {prod_nm} | {mkt_nm}"
+            change_rate = calculate_change_rate_from_close_and_delta(
+                kospi_night_row.get("TDD_CLSPRC"),
+                kospi_night_row.get("CMPPREVDD_PRC"),
+            )
             render_custom_metric(
                 "KOSPI 200 야간선물",
                 format_metric_number(kospi_night_row.get("TDD_CLSPRC")),
                 format_metric_number(kospi_night_row.get("CMPPREVDD_PRC")),
-                None,
+                change_rate,
                 extra_info=extra,
             )
         else:
