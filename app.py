@@ -153,14 +153,33 @@ def extract_rows_from_krx_payload(payload):
 def fetch_krx_futures_by_date(bas_dd, auth_key):
     """지정 기준일자 KRX 선물 데이터 조회"""
     url = "https://data-dbg.krx.co.kr/svc/apis/drv/fut_bydd_trd.json"
-    response = requests.get(
-        url,
-        params={"AUTH_KEY": auth_key, "basDd": bas_dd},
-        timeout=10
-    )
-    response.raise_for_status()
-    payload = response.json()
-    return extract_rows_from_krx_payload(payload)
+    params = {"AUTH_KEY": auth_key, "basDd": bas_dd}
+    headers = {
+        "User-Agent": (
+            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+            "AppleWebKit/537.36 (KHTML, like Gecko) "
+            "Chrome/131.0.0.0 Safari/537.36"
+        ),
+        "Accept": "application/json,text/plain,*/*",
+        "Referer": "https://data-dbg.krx.co.kr/",
+        "Origin": "https://data-dbg.krx.co.kr",
+    }
+
+    last_err = None
+    for timeout_sec in (10, 20):
+        try:
+            response = requests.get(url, params=params, headers=headers, timeout=timeout_sec)
+            response.raise_for_status()
+            payload = response.json()
+            return extract_rows_from_krx_payload(payload)
+        except Exception as e:
+            last_err = e
+            continue
+
+    if isinstance(last_err, requests.HTTPError) and last_err.response is not None:
+        body_preview = last_err.response.text[:200].replace("\n", " ")
+        raise RuntimeError(f"HTTP {last_err.response.status_code}: {body_preview}") from last_err
+    raise last_err
 
 def normalize_kr_text(value):
     return re.sub(r"\s+", "", str(value or "")).strip()
@@ -273,7 +292,7 @@ def select_latest_kospi_night_contract(rows):
     )
     return same_month_rows[0] if same_month_rows else None
 
-@st.cache_data(show_spinner=False, ttl=600)
+@st.cache_data(show_spinner=False, ttl=60)
 def _get_latest_kospi_night_futures_cached(auth_key, bas_dd_candidates, debug_version):
     """KRX AUTH_KEY와 기준일 후보에 종속된 캐시 조회"""
     debug_logs = []
