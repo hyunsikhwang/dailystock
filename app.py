@@ -155,54 +155,89 @@ def fetch_krx_futures_by_date(bas_dd, auth_key):
     """지정 기준일자 KRX 선물 데이터 조회"""
     url = "https://data-dbg.krx.co.kr/svc/apis/drv/fut_bydd_trd.json"
     params = {"AUTH_KEY": auth_key, "basDd": bas_dd}
-    headers = {
-        "User-Agent": (
-            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
-            "AppleWebKit/537.36 (KHTML, like Gecko) "
-            "Chrome/131.0.0.0 Safari/537.36"
-        ),
-        "Accept": "application/json,text/plain,*/*",
-        "Referer": "https://data-dbg.krx.co.kr/",
-        "Origin": "https://data-dbg.krx.co.kr",
-        "Accept-Language": "ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7",
-        "Connection": "keep-alive",
-    }
+    user_agent = (
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+        "AppleWebKit/537.36 (KHTML, like Gecko) "
+        "Chrome/131.0.0.0 Safari/537.36"
+    )
+    header_profiles = [
+        # 브라우저 직접 URL 진입과 유사한 최소 헤더
+        {
+            "name": "minimal",
+            "headers": {
+                "User-Agent": user_agent,
+                "Accept": "*/*",
+                "Accept-Language": "ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7",
+            },
+            "warmup": False,
+        },
+        # 브라우저 navigate 흐름과 유사한 헤더
+        {
+            "name": "navigate",
+            "headers": {
+                "User-Agent": user_agent,
+                "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+                "Accept-Language": "ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7",
+                "Sec-Fetch-Site": "none",
+                "Sec-Fetch-Mode": "navigate",
+                "Sec-Fetch-Dest": "document",
+                "Sec-Fetch-User": "?1",
+                "Upgrade-Insecure-Requests": "1",
+            },
+            "warmup": False,
+        },
+        # 세션/쿠키 확보 후 호출
+        {
+            "name": "session",
+            "headers": {
+                "User-Agent": user_agent,
+                "Accept": "application/json,text/plain,*/*",
+                "Referer": "https://data-dbg.krx.co.kr/",
+                "Accept-Language": "ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7",
+                "Connection": "keep-alive",
+            },
+            "warmup": True,
+        },
+    ]
 
     last_err = None
-    for timeout_sec in (10, 20):
-        try:
-            session = requests.Session()
-            session.headers.update(headers)
+    last_profile = "-"
+    for profile in header_profiles:
+        for timeout_sec in (10, 20):
+            try:
+                session = requests.Session()
+                session.headers.update(profile["headers"])
 
-            # 일부 환경에서 API 직접 접근 시 403이 발생해, 먼저 루트 페이지로 쿠키를 확보
-            session.get("https://data-dbg.krx.co.kr/", timeout=timeout_sec, allow_redirects=True)
+                if profile["warmup"]:
+                    session.get("https://data-dbg.krx.co.kr/", timeout=timeout_sec, allow_redirects=True)
 
-            response = session.get(
-                url,
-                params=params,
-                timeout=timeout_sec,
-                allow_redirects=False,
-            )
-            if response.is_redirect or response.is_permanent_redirect:
-                redirect_url = response.headers.get("Location", "")
-                if redirect_url:
-                    target = urljoin(url, redirect_url)
-                    parsed = urlparse(target)
-                    if parsed.scheme == "http":
-                        target = target.replace("http://", "https://", 1)
-                    response = session.get(target, timeout=timeout_sec, allow_redirects=False)
-            response.raise_for_status()
-            payload = response.json()
-            return extract_rows_from_krx_payload(payload)
-        except Exception as e:
-            last_err = e
-            continue
+                response = session.get(
+                    url,
+                    params=params,
+                    timeout=timeout_sec,
+                    allow_redirects=False,
+                )
+                if response.is_redirect or response.is_permanent_redirect:
+                    redirect_url = response.headers.get("Location", "")
+                    if redirect_url:
+                        target = urljoin(url, redirect_url)
+                        parsed = urlparse(target)
+                        if parsed.scheme == "http":
+                            target = target.replace("http://", "https://", 1)
+                        response = session.get(target, timeout=timeout_sec, allow_redirects=False)
+                response.raise_for_status()
+                payload = response.json()
+                return extract_rows_from_krx_payload(payload)
+            except Exception as e:
+                last_profile = profile["name"]
+                last_err = e
+                continue
 
     if isinstance(last_err, requests.HTTPError) and last_err.response is not None:
         body_preview = last_err.response.text[:200].replace("\n", " ")
         raise RuntimeError(
             f"HTTP {last_err.response.status_code}: {body_preview} "
-            "(브라우저는 성공/앱은 실패 시 서버측 IP 차단 또는 봇 차단 가능)"
+            f"(profile={last_profile}, 브라우저는 성공/앱은 실패 시 서버측 IP 차단 또는 봇 차단 가능)"
         ) from last_err
     raise last_err
 
