@@ -249,27 +249,53 @@ def select_latest_kospi_night_contract(rows):
 @st.cache_data(show_spinner=False, ttl=600)
 def _get_latest_kospi_night_futures_cached(auth_key, bas_dd_candidates):
     """KRX AUTH_KEY와 기준일 후보에 종속된 캐시 조회"""
+    debug_logs = []
     last_error = None
     for bas_dd in bas_dd_candidates:
         try:
             rows = fetch_krx_futures_by_date(bas_dd, auth_key)
         except Exception as e:
             last_error = str(e)
+            debug_logs.append({
+                "bas_dd": bas_dd,
+                "status": "error",
+                "rows": 0,
+                "filtered": 0,
+                "selected_isu_nm": "-",
+                "selected_close": "-",
+                "message": str(e),
+            })
             continue
 
+        filtered_count = 0
+        for row in rows:
+            prod_nm = normalize_kr_text(row.get("PROD_NM"))
+            mkt_nm = normalize_kr_text(row.get("MKT_NM"))
+            if "코스피200선물" in prod_nm and "야간" in mkt_nm:
+                filtered_count += 1
+
         selected = select_latest_kospi_night_contract(rows)
+        debug_logs.append({
+            "bas_dd": bas_dd,
+            "status": "ok",
+            "rows": len(rows),
+            "filtered": filtered_count,
+            "selected_isu_nm": str(selected.get("ISU_NM")) if selected else "-",
+            "selected_close": str(selected.get("TDD_CLSPRC")) if selected else "-",
+            "message": "selected" if selected else "no-match",
+        })
         if selected is not None:
-            return selected, None
+            return selected, None, debug_logs
 
     if last_error:
-        return None, f"KRX API 호출 실패: {last_error}"
-    return None, "최근 10일(내일 기준) 내 야간 코스피200 선물 데이터가 없습니다."
+        return None, f"KRX API 호출 실패: {last_error}", debug_logs
+    return None, "최근 10일(내일 기준) 내 야간 코스피200 선물 데이터가 없습니다.", debug_logs
 
 def get_latest_kospi_night_futures():
     """최신 유효 코스피200 야간선물 데이터 1건 조회"""
     auth_key, auth_msg = get_krx_auth_key()
     if not auth_key:
-        return None, auth_msg
+        return None, auth_msg, []
     bas_dd_candidates = tuple(iter_basdd_candidates_kst())
     return _get_latest_kospi_night_futures_cached(auth_key, bas_dd_candidates)
 
@@ -458,7 +484,7 @@ def update_dashboard(selected_date):
             </div>
         """, unsafe_allow_html=True)
 
-    kospi_night_row, kospi_night_msg = get_latest_kospi_night_futures()
+    kospi_night_row, kospi_night_msg, kospi_night_debug_logs = get_latest_kospi_night_futures()
 
     col1, col2, col3 = st.columns(3)
     with col1:
@@ -490,6 +516,17 @@ def update_dashboard(selected_date):
                 None,
                 extra_info=kospi_night_msg or "데이터를 가져올 수 없습니다.",
             )
+
+    # 임시 디버그 출력: 날짜별 KRX 호출 결과
+    if kospi_night_debug_logs:
+        with st.expander("KRX 야간선물 디버그(임시)"):
+            for item in kospi_night_debug_logs:
+                st.write(
+                    f"- basDd={item.get('bas_dd')} | status={item.get('status')} | "
+                    f"rows={item.get('rows')} | filtered={item.get('filtered')} | "
+                    f"isu={item.get('selected_isu_nm', '-')} | close={item.get('selected_close', '-')} | "
+                    f"msg={item.get('message')}"
+                )
 
     # pyecharts 차트 구성 (마커 제거 버전)
     line = (
