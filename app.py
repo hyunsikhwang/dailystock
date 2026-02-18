@@ -217,7 +217,7 @@ def select_latest_kospi_night_contract(rows):
         mkt_nm = normalize_kr_text(row.get("MKT_NM"))
 
         # API별 표기 차이(공백/접미어)를 허용
-        if "코스피200 선물" not in prod_nm:
+        if "코스피200선물" not in prod_nm:
             continue
         if "야간" not in mkt_nm:
             continue
