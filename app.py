@@ -8,6 +8,7 @@ import numpy as np
 from datetime import datetime, time, timedelta
 import pytz
 import re
+from urllib.parse import urljoin, urlparse
 
 # 페이지 설정
 st.set_page_config(
@@ -163,12 +164,33 @@ def fetch_krx_futures_by_date(bas_dd, auth_key):
         "Accept": "application/json,text/plain,*/*",
         "Referer": "https://data-dbg.krx.co.kr/",
         "Origin": "https://data-dbg.krx.co.kr",
+        "Accept-Language": "ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7",
+        "Connection": "keep-alive",
     }
 
     last_err = None
     for timeout_sec in (10, 20):
         try:
-            response = requests.get(url, params=params, headers=headers, timeout=timeout_sec)
+            session = requests.Session()
+            session.headers.update(headers)
+
+            # 일부 환경에서 API 직접 접근 시 403이 발생해, 먼저 루트 페이지로 쿠키를 확보
+            session.get("https://data-dbg.krx.co.kr/", timeout=timeout_sec, allow_redirects=True)
+
+            response = session.get(
+                url,
+                params=params,
+                timeout=timeout_sec,
+                allow_redirects=False,
+            )
+            if response.is_redirect or response.is_permanent_redirect:
+                redirect_url = response.headers.get("Location", "")
+                if redirect_url:
+                    target = urljoin(url, redirect_url)
+                    parsed = urlparse(target)
+                    if parsed.scheme == "http":
+                        target = target.replace("http://", "https://", 1)
+                    response = session.get(target, timeout=timeout_sec, allow_redirects=False)
             response.raise_for_status()
             payload = response.json()
             return extract_rows_from_krx_payload(payload)
@@ -178,7 +200,10 @@ def fetch_krx_futures_by_date(bas_dd, auth_key):
 
     if isinstance(last_err, requests.HTTPError) and last_err.response is not None:
         body_preview = last_err.response.text[:200].replace("\n", " ")
-        raise RuntimeError(f"HTTP {last_err.response.status_code}: {body_preview}") from last_err
+        raise RuntimeError(
+            f"HTTP {last_err.response.status_code}: {body_preview} "
+            "(브라우저는 성공/앱은 실패 시 서버측 IP 차단 또는 봇 차단 가능)"
+        ) from last_err
     raise last_err
 
 def normalize_kr_text(value):
