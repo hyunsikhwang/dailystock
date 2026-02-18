@@ -189,6 +189,16 @@ def parse_yyyymm_contract(value):
 
     return None
 
+def yyyymm_to_serial(yyyymm):
+    year = int(yyyymm) // 100
+    month = int(yyyymm) % 100
+    return year * 12 + month
+
+def get_current_yyyymm_kst():
+    seoul_tz = pytz.timezone('Asia/Seoul')
+    now_kst = datetime.now(seoul_tz)
+    return now_kst.year * 100 + now_kst.month
+
 def normalize_bas_dd(value):
     digits = re.sub(r"\D", "", str(value or ""))
     if len(digits) >= 8:
@@ -210,7 +220,7 @@ def format_metric_number(value):
     return f"{num:,.2f}"
 
 def select_latest_kospi_night_contract(rows):
-    """코스피200 선물/야간 중 최신 월물 계약 선택"""
+    """코스피200 선물/야간 중 현재 기준 최근(근접) 월물 계약 선택"""
     candidates = []
     for row in rows:
         prod_nm = normalize_kr_text(row.get("PROD_NM"))
@@ -235,8 +245,20 @@ def select_latest_kospi_night_contract(rows):
     if not candidates:
         return None
 
-    latest_month = max(month for month, _ in candidates)
-    same_month_rows = [row for month, row in candidates if month == latest_month]
+    current_yyyymm = get_current_yyyymm_kst()
+    current_serial = yyyymm_to_serial(current_yyyymm)
+
+    unique_months = sorted({month for month, _ in candidates})
+    target_month = min(
+        unique_months,
+        key=lambda month: (
+            abs(yyyymm_to_serial(month) - current_serial),
+            0 if yyyymm_to_serial(month) >= current_serial else 1,
+            yyyymm_to_serial(month),
+        ),
+    )
+
+    same_month_rows = [row for month, row in candidates if month == target_month]
     same_month_rows.sort(
         key=lambda row: (
             normalize_bas_dd(row.get("BAS_DD")),
