@@ -9,6 +9,8 @@ from datetime import datetime, time, timedelta
 import pytz
 import re
 from urllib.parse import urljoin, urlparse
+import subprocess
+import json
 
 # 페이지 설정
 st.set_page_config(
@@ -235,11 +237,38 @@ def fetch_krx_futures_by_date(bas_dd, auth_key):
 
     if isinstance(last_err, requests.HTTPError) and last_err.response is not None:
         body_preview = last_err.response.text[:200].replace("\n", " ")
-        raise RuntimeError(
+        request_err = RuntimeError(
             f"HTTP {last_err.response.status_code}: {body_preview} "
             f"(profile={last_profile}, 브라우저는 성공/앱은 실패 시 서버측 IP 차단 또는 봇 차단 가능)"
-        ) from last_err
-    raise last_err
+        )
+    else:
+        request_err = last_err
+
+    # requests가 WAF에 차단될 때 curl이 통과하는 경우가 있어 fallback 시도
+    curl_cmd = [
+        "curl",
+        "-sS",
+        "--http1.1",
+        "--max-time",
+        "20",
+        "-H",
+        f"User-Agent: {user_agent}",
+        "-H",
+        "Accept: */*",
+        "-H",
+        "Accept-Language: ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7",
+        f"{url}?AUTH_KEY={auth_key}&basDd={bas_dd}",
+    ]
+    try:
+        out = subprocess.check_output(curl_cmd, stderr=subprocess.STDOUT, text=True)
+        payload = json.loads(out)
+        rows = extract_rows_from_krx_payload(payload)
+        if rows:
+            return rows
+    except Exception as curl_err:
+        raise RuntimeError(f"{request_err} | curl_fallback_error={str(curl_err)[:200]}") from curl_err
+
+    raise request_err
 
 def normalize_kr_text(value):
     return re.sub(r"\s+", "", str(value or "")).strip()
