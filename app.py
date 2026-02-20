@@ -401,11 +401,13 @@ def _get_latest_kospi_night_futures_cached(auth_key, bas_dd_candidates, debug_ve
         except Exception as e:
             last_error = str(e)
             debug_logs.append({
+                "request_bas_dd": bas_dd,
                 "bas_dd": bas_dd,
                 "status": "error",
                 "rows": 0,
                 "filtered": 0,
                 "selected_isu_nm": "-",
+                "selected_bas_dd": "-",
                 "selected_close": "-",
                 "message": str(e),
                 "current_yyyymm": current_yyyymm,
@@ -430,11 +432,13 @@ def _get_latest_kospi_night_futures_cached(auth_key, bas_dd_candidates, debug_ve
             )
         selected = select_latest_kospi_night_contract(rows)
         debug_logs.append({
+            "request_bas_dd": bas_dd,
             "bas_dd": bas_dd,
             "status": "ok",
             "rows": len(rows),
             "filtered": filtered_count,
             "selected_isu_nm": str(selected.get("ISU_NM")) if selected else "-",
+            "selected_bas_dd": str(selected.get("BAS_DD")) if selected else "-",
             "selected_close": str(selected.get("TDD_CLSPRC")) if selected else "-",
             "message": "selected" if selected else "no-match",
             "current_yyyymm": current_yyyymm,
@@ -455,6 +459,47 @@ def get_latest_kospi_night_futures():
         return None, auth_msg, []
     bas_dd_candidates = tuple(iter_basdd_candidates_kst())
     return _get_latest_kospi_night_futures_cached(auth_key, bas_dd_candidates, "debug-v2")
+
+def render_kospi_night_debug_logs(debug_logs):
+    """야간선물 조회 이력을 화면에 디버그용으로 표시"""
+    if not debug_logs:
+        return
+
+    logs_df = pd.DataFrame(debug_logs).copy()
+    logs_df["조회순서"] = range(1, len(logs_df) + 1)
+    preferred_cols = [
+        "조회순서",
+        "request_bas_dd",
+        "status",
+        "rows",
+        "filtered",
+        "candidate_months",
+        "target_month",
+        "selected_bas_dd",
+        "selected_isu_nm",
+        "selected_close",
+        "message",
+    ]
+    visible_cols = [col for col in preferred_cols if col in logs_df.columns]
+    logs_df = logs_df[visible_cols]
+    logs_df = logs_df.rename(
+        columns={
+            "request_bas_dd": "요청기준일",
+            "status": "상태",
+            "rows": "전체건수",
+            "filtered": "필터통과건수",
+            "candidate_months": "후보월물",
+            "target_month": "선택월물",
+            "selected_bas_dd": "응답기준일",
+            "selected_isu_nm": "선택종목",
+            "selected_close": "종가",
+            "message": "메시지",
+        }
+    )
+
+    with st.expander("야간선물 데이터 조회 디버그", expanded=False):
+        st.caption("조회순서 1이 가장 먼저 요청된 기준일입니다. (내일→오늘→과거)")
+        st.dataframe(logs_df, use_container_width=True, hide_index=True)
 
 def get_valid_data(start_date):
     """
@@ -641,7 +686,7 @@ def update_dashboard(selected_date):
             </div>
         """, unsafe_allow_html=True)
 
-    kospi_night_row, kospi_night_msg, _ = get_latest_kospi_night_futures()
+    kospi_night_row, kospi_night_msg, kospi_night_debug_logs = get_latest_kospi_night_futures()
 
     col1, col2, col3 = st.columns(3)
     with col1:
@@ -677,6 +722,8 @@ def update_dashboard(selected_date):
                 None,
                 extra_info=kospi_night_msg or "데이터를 가져올 수 없습니다.",
             )
+
+    render_kospi_night_debug_logs(kospi_night_debug_logs)
 
     # pyecharts 차트 구성 (마커 제거 버전)
     line = (
