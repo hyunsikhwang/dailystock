@@ -204,8 +204,7 @@ def render_market_countdown(context):
         flex: 0 0 auto;
       }
       .krx-countdown-label {
-        overflow: hidden;
-        text-overflow: ellipsis;
+        font-size: 0.83rem;
       }
       .krx-countdown-time {
         color: #0f172a;
@@ -1064,7 +1063,7 @@ def main():
     if 'selected_date' not in st.session_state:
         st.session_state.selected_date = today
 
-    col_date, col_btn, col_countdown, col_empty = st.columns([2, 1, 3, 4])
+    col_date, col_btn, col_countdown, col_empty = st.columns([2, 1, 5, 2])
     
     with col_date:
         # date_input의 값을 session_state와 연동
@@ -1081,6 +1080,7 @@ def main():
                 st.rerun()
 
     with col_countdown:
+        st.markdown("<div style='height: 1.95rem;'></div>", unsafe_allow_html=True)
         render_market_countdown(countdown_context)
 
     update_dashboard(st.session_state.selected_date)
