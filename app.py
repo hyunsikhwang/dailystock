@@ -1,4 +1,5 @@
 import streamlit as st
+import streamlit.components.v1 as components
 from pyecharts import options as opts
 from pyecharts.charts import Line
 from streamlit_echarts import st_pyecharts
@@ -7,6 +8,7 @@ import pandas as pd
 import numpy as np
 from datetime import datetime, time, timedelta
 import pytz
+import holidays
 import re
 from urllib.parse import urljoin, urlparse
 import subprocess
@@ -95,6 +97,208 @@ st.markdown("""
     }
 </style>
 """, unsafe_allow_html=True)
+
+KST_TZ = pytz.timezone('Asia/Seoul')
+KRX_OPEN_TIME = time(9, 0, 0)
+KRX_CLOSE_TIME = time(15, 30, 0)
+
+@st.cache_data(show_spinner=False, ttl=3600)
+def get_kr_holiday_dates(years):
+    return sorted({day.strftime("%Y-%m-%d") for day in holidays.KR(years=years).keys()})
+
+def is_krx_trading_day(date_kst, kr_holiday_set=None):
+    if date_kst.weekday() >= 5:
+        return False
+    if kr_holiday_set is None:
+        years = (date_kst.year - 1, date_kst.year, date_kst.year + 1)
+        kr_holiday_set = set(get_kr_holiday_dates(years))
+    return date_kst.strftime("%Y-%m-%d") not in kr_holiday_set
+
+def get_next_krx_open_datetime(now_kst, kr_holiday_set=None):
+    candidate_date = now_kst.date()
+    if kr_holiday_set is None:
+        years = (candidate_date.year - 1, candidate_date.year, candidate_date.year + 1)
+        kr_holiday_set = set(get_kr_holiday_dates(years))
+
+    for _ in range(370):
+        open_dt = KST_TZ.localize(datetime.combine(candidate_date, KRX_OPEN_TIME))
+        if is_krx_trading_day(candidate_date, kr_holiday_set) and now_kst < open_dt:
+            return open_dt
+        candidate_date += timedelta(days=1)
+    return KST_TZ.localize(datetime.combine(candidate_date, KRX_OPEN_TIME))
+
+def get_market_countdown_context(now_kst):
+    years = (now_kst.year - 1, now_kst.year, now_kst.year + 1, now_kst.year + 2)
+    holiday_dates = get_kr_holiday_dates(years)
+    holiday_set = set(holiday_dates)
+
+    today = now_kst.date()
+    open_dt = KST_TZ.localize(datetime.combine(today, KRX_OPEN_TIME))
+    close_dt = KST_TZ.localize(datetime.combine(today, KRX_CLOSE_TIME))
+
+    if is_krx_trading_day(today, holiday_set) and open_dt <= now_kst < close_dt:
+        market_state = "open"
+        target_dt_kst = close_dt
+        label = "장 종료까지"
+    else:
+        market_state = "closed"
+        target_dt_kst = get_next_krx_open_datetime(now_kst, holiday_set)
+        label = "다음 장 시작까지"
+
+    return {
+        "market_state": market_state,
+        "target_dt_kst": target_dt_kst,
+        "target_epoch_ms": int(target_dt_kst.timestamp() * 1000),
+        "label": label,
+        "holiday_dates": holiday_dates,
+    }
+
+def render_market_countdown(context):
+    config = {
+        "initialState": context["market_state"],
+        "initialLabel": context["label"],
+        "initialTargetEpochMs": context["target_epoch_ms"],
+        "holidayDates": context["holiday_dates"],
+    }
+    html_template = """
+    <style>
+      .krx-countdown-card {
+        background: #f8fafc;
+        border: 1px solid #e2e8f0;
+        border-radius: 12px;
+        padding: 0.7rem 0.9rem;
+        min-height: 72px;
+      }
+      .krx-countdown-status {
+        color: #64748b;
+        font-size: 0.78rem;
+        font-weight: 600;
+      }
+      .krx-countdown-label {
+        color: #334155;
+        font-size: 0.85rem;
+        margin-top: 0.35rem;
+      }
+      .krx-countdown-time {
+        color: #0f172a;
+        font-size: 1.25rem;
+        font-weight: 700;
+        margin-top: 0.2rem;
+        letter-spacing: 0.04em;
+      }
+    </style>
+    <div class="krx-countdown-card">
+      <div id="krx-status" class="krx-countdown-status"></div>
+      <div id="krx-label" class="krx-countdown-label"></div>
+      <div id="krx-time" class="krx-countdown-time">00:00:00</div>
+    </div>
+    <script>
+      const config = __CONFIG__;
+      const holidaySet = new Set(config.holidayDates || []);
+      const KST_OFFSET_MS = 9 * 60 * 60 * 1000;
+      const DAY_MS = 24 * 60 * 60 * 1000;
+
+      const statusEl = document.getElementById("krx-status");
+      const labelEl = document.getElementById("krx-label");
+      const timeEl = document.getElementById("krx-time");
+
+      function toKstParts(epochMs) {
+        const d = new Date(epochMs + KST_OFFSET_MS);
+        return {
+          year: d.getUTCFullYear(),
+          month: d.getUTCMonth() + 1,
+          day: d.getUTCDate(),
+          hour: d.getUTCHours(),
+          minute: d.getUTCMinutes(),
+          second: d.getUTCSeconds(),
+          weekday: d.getUTCDay()
+        };
+      }
+
+      function ymd(parts) {
+        const m = String(parts.month).padStart(2, "0");
+        const d = String(parts.day).padStart(2, "0");
+        return `${parts.year}-${m}-${d}`;
+      }
+
+      function isTradingDay(parts) {
+        if (parts.weekday === 0 || parts.weekday === 6) {
+          return false;
+        }
+        return !holidaySet.has(ymd(parts));
+      }
+
+      function epochFromKst(y, m, d, h, min, sec) {
+        return Date.UTC(y, m - 1, d, h - 9, min, sec);
+      }
+
+      function addKstDays(parts, days) {
+        const midnightEpoch = epochFromKst(parts.year, parts.month, parts.day, 0, 0, 0);
+        return toKstParts(midnightEpoch + (days * DAY_MS));
+      }
+
+      function findNextOpenEpoch(fromEpoch) {
+        let cursor = toKstParts(fromEpoch);
+        for (let i = 0; i < 370; i += 1) {
+          const openEpoch = epochFromKst(cursor.year, cursor.month, cursor.day, 9, 0, 0);
+          if (isTradingDay(cursor) && fromEpoch < openEpoch) {
+            return openEpoch;
+          }
+          cursor = addKstDays(cursor, 1);
+        }
+        return fromEpoch + DAY_MS;
+      }
+
+      function computeContext(nowEpoch) {
+        const p = toKstParts(nowEpoch);
+        const openEpoch = epochFromKst(p.year, p.month, p.day, 9, 0, 0);
+        const closeEpoch = epochFromKst(p.year, p.month, p.day, 15, 30, 0);
+
+        if (isTradingDay(p) && nowEpoch >= openEpoch && nowEpoch < closeEpoch) {
+          return {
+            state: "open",
+            label: "장 종료까지",
+            targetEpoch: closeEpoch
+          };
+        }
+        return {
+          state: "closed",
+          label: "다음 장 시작까지",
+          targetEpoch: findNextOpenEpoch(nowEpoch)
+        };
+      }
+
+      function formatHms(seconds) {
+        const s = Math.max(0, seconds);
+        const hh = String(Math.floor(s / 3600)).padStart(2, "0");
+        const mm = String(Math.floor((s % 3600) / 60)).padStart(2, "0");
+        const ss = String(s % 60).padStart(2, "0");
+        return `${hh}:${mm}:${ss}`;
+      }
+
+      function render(ctx, nowEpoch) {
+        const stateUpper = ctx.state === "open" ? "OPEN" : "CLOSED";
+        const remainSec = Math.max(0, Math.floor((ctx.targetEpoch - nowEpoch) / 1000));
+        statusEl.textContent = `한국 증시 상태: ${stateUpper}`;
+        labelEl.textContent = ctx.label;
+        timeEl.textContent = formatHms(remainSec);
+      }
+
+      function tick() {
+        const now = Date.now();
+        const ctx = computeContext(now);
+        render(ctx, now);
+      }
+
+      statusEl.textContent = `한국 증시 상태: ${String(config.initialState || "closed").toUpperCase()}`;
+      labelEl.textContent = config.initialLabel || "다음 장 시작까지";
+      timeEl.textContent = "00:00:00";
+      tick();
+      setInterval(tick, 1000);
+    </script>
+    """
+    html = html_template.replace("__CONFIG__", json.dumps(config, ensure_ascii=False))
+    components.html(html, height=92)
 
 def fetch_index_data(index_type, today_str):
     """네이버 증권 API를 통해 특정 지수(KOSPI/KOSDAQ) 데이터를 가져옴"""
@@ -820,14 +1024,15 @@ def main():
     """, unsafe_allow_html=True)
 
     # 날짜 선택 기능 추가 (상단 배치)
-    seoul_tz = pytz.timezone('Asia/Seoul')
-    today = datetime.now(seoul_tz).date()
+    now_kst = datetime.now(KST_TZ)
+    today = now_kst.date()
+    countdown_context = get_market_countdown_context(now_kst)
 
     # 세션 상태 초기화
     if 'selected_date' not in st.session_state:
         st.session_state.selected_date = today
 
-    col_date, col_btn, col_empty = st.columns([2, 1, 7])
+    col_date, col_btn, col_countdown, col_empty = st.columns([2, 1, 3, 4])
     
     with col_date:
         # date_input의 값을 session_state와 연동
@@ -842,6 +1047,9 @@ def main():
             if st.session_state.selected_date != today:
                 st.session_state.selected_date = today
                 st.rerun()
+
+    with col_countdown:
+        render_market_countdown(countdown_context)
 
     update_dashboard(st.session_state.selected_date)
 

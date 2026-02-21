@@ -3,3 +3,4 @@ streamlit-echarts
 requests
 pytz
 pyecharts
+holidays
