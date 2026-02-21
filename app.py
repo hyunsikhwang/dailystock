@@ -832,8 +832,6 @@ def update_dashboard(selected_date):
 
     # 날짜 표시 로직 개선
     display_msg = f"기준 날짜: {actual_date_str} (한국 시간)"
-    if actual_date_str != selected_date.strftime('%Y%m%d'):
-         st.warning(f"선택한 날짜 ({selected_date})에 데이터가 없어, 가장 최근 데이터가 있는 날짜 ({actual_date_str})로 조회합니다.")
     st.write(display_msg)
 
     # 전체 타임라인 생성 및 데이터 병합
