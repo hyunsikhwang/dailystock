@@ -162,34 +162,66 @@ def render_market_countdown(context):
     }
     html_template = """
     <style>
+      body {
+        margin: 0;
+      }
       .krx-countdown-card {
         background: #f8fafc;
         border: 1px solid #e2e8f0;
         border-radius: 12px;
-        padding: 0.7rem 0.9rem;
-        min-height: 72px;
+        padding: 0.52rem 0.72rem;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 0.6rem;
+        white-space: nowrap;
+        overflow: hidden;
       }
-      .krx-countdown-status {
-        color: #64748b;
-        font-size: 0.78rem;
-        font-weight: 600;
+      .krx-countdown-left {
+        display: flex;
+        align-items: center;
+        gap: 0.55rem;
+        min-width: 0;
+        flex: 1 1 auto;
+        color: #334155;
+        font-size: 0.84rem;
+      }
+      .krx-status-badge {
+        border: 1px solid #cbd5e1;
+        background: #ffffff;
+        color: #475569;
+        border-radius: 999px;
+        font-size: 0.72rem;
+        font-weight: 700;
+        letter-spacing: 0.04em;
+        padding: 0.14rem 0.5rem;
+        flex: 0 0 auto;
+      }
+      .krx-divider {
+        width: 1px;
+        height: 14px;
+        background: #cbd5e1;
+        flex: 0 0 auto;
       }
       .krx-countdown-label {
-        color: #334155;
-        font-size: 0.85rem;
-        margin-top: 0.35rem;
+        overflow: hidden;
+        text-overflow: ellipsis;
       }
       .krx-countdown-time {
         color: #0f172a;
-        font-size: 1.25rem;
+        font-size: 1.08rem;
         font-weight: 700;
-        margin-top: 0.2rem;
         letter-spacing: 0.04em;
+        font-variant-numeric: tabular-nums;
+        flex: 0 0 auto;
       }
     </style>
     <div class="krx-countdown-card">
-      <div id="krx-status" class="krx-countdown-status"></div>
-      <div id="krx-label" class="krx-countdown-label"></div>
+      <div class="krx-countdown-left">
+        <div id="krx-status" class="krx-status-badge"></div>
+        <div class="krx-divider"></div>
+        <div id="krx-label" class="krx-countdown-label"></div>
+      </div>
       <div id="krx-time" class="krx-countdown-time">00:00:00</div>
     </div>
     <script>
@@ -279,7 +311,7 @@ def render_market_countdown(context):
       function render(ctx, nowEpoch) {
         const stateUpper = ctx.state === "open" ? "OPEN" : "CLOSED";
         const remainSec = Math.max(0, Math.floor((ctx.targetEpoch - nowEpoch) / 1000));
-        statusEl.textContent = `한국 증시 상태: ${stateUpper}`;
+        statusEl.textContent = stateUpper;
         labelEl.textContent = ctx.label;
         timeEl.textContent = formatHms(remainSec);
       }
@@ -290,7 +322,7 @@ def render_market_countdown(context):
         render(ctx, now);
       }
 
-      statusEl.textContent = `한국 증시 상태: ${String(config.initialState || "closed").toUpperCase()}`;
+      statusEl.textContent = String(config.initialState || "closed").toUpperCase();
       labelEl.textContent = config.initialLabel || "다음 장 시작까지";
       timeEl.textContent = "00:00:00";
       tick();
@@ -298,7 +330,7 @@ def render_market_countdown(context):
     </script>
     """
     html = html_template.replace("__CONFIG__", json.dumps(config, ensure_ascii=False))
-    components.html(html, height=92)
+    components.html(html, height=62)
 
 def fetch_index_data(index_type, today_str):
     """네이버 증권 API를 통해 특정 지수(KOSPI/KOSDAQ) 데이터를 가져옴"""
