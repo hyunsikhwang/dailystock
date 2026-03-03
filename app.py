@@ -2,6 +2,7 @@ import streamlit as st
 import streamlit.components.v1 as components
 from pyecharts import options as opts
 from pyecharts.charts import Line
+from pyecharts.commons.utils import JsCode
 from streamlit_echarts import st_pyecharts
 import requests
 import pandas as pd
@@ -762,16 +763,51 @@ def get_valid_data(start_date):
     return pd.DataFrame(), pd.DataFrame(), None
 
 def clean_value(val):
-    """값을 float으로 변환하되, NaN/None 시 None 반환"""
+    """값을 float로 변환하고 비정상 값은 None으로 처리"""
     try:
         if val is None:
             return None
+        if isinstance(val, str):
+            val = val.replace(",", "").strip()
+            if val == "":
+                return None
         f_val = float(val)
         if not np.isfinite(f_val):
             return None
         return f_val
     except:
         return None
+
+def sanitize_series(values, max_jump_ratio=0.15, hard_ratio_limit=0.5):
+    """급격한 이상치 값을 None으로 치환"""
+    sanitized = []
+    anchor = None
+    prev_valid = None
+
+    for val in values:
+        if val is None:
+            sanitized.append(None)
+            continue
+
+        if anchor is None:
+            anchor = val
+            prev_valid = val
+            sanitized.append(val)
+            continue
+
+        anchor_base = abs(anchor) if abs(anchor) > 1e-12 else 1.0
+        prev_base = abs(prev_valid) if abs(prev_valid) > 1e-12 else 1.0
+        anchor_gap = abs(val - anchor) / anchor_base
+        jump_gap = abs(val - prev_valid) / prev_base
+
+        if anchor_gap > hard_ratio_limit or jump_gap > max_jump_ratio:
+            sanitized.append(None)
+            continue
+
+        sanitized.append(val)
+        prev_valid = val
+
+    return sanitized
 
 def generate_full_timeline():
     """09:00부터 15:30까지 1분 단위 리스트 생성"""
@@ -785,30 +821,42 @@ def generate_full_timeline():
     return timeline
 
 def calculate_y_axis_bounds(values):
-    """첫 번째 유효 데이터를 Y축 중앙(50%)에 위치시키도록 min, max 계산"""
+    """첫 번째 유효 데이터를 기준으로 Y축 min/max를 계산"""
     reference_val = None
     for v in values:
         if v is not None:
             reference_val = v
             break
-    
+
     if reference_val is None:
         return None, None
-    
+
     valid_values = [v for v in values if v is not None]
     max_val = max(valid_values)
     min_val = min(valid_values)
-    
+
     diff_up = max_val - reference_val
     diff_down = reference_val - min_val
     margin = max(diff_up, diff_down)
-    
+
     if margin == 0:
         margin = reference_val * 0.005
     else:
         margin = margin * 1.15
-        
-    return float(reference_val - margin), float(reference_val + margin)
+
+    lower = float(reference_val - margin)
+    upper = float(reference_val + margin)
+
+    if lower > upper:
+        lower, upper = upper, lower
+    elif lower == upper:
+        fallback_margin = abs(reference_val) * 0.005
+        if fallback_margin == 0:
+            fallback_margin = 1.0
+        lower -= fallback_margin
+        upper += fallback_margin
+
+    return round(lower, 2), round(upper, 2)
 
 def get_extrema_info(timeline, values):
     """최고점과 최저점의 시간과 값을 반환"""
@@ -852,6 +900,8 @@ def update_dashboard(selected_date):
     # 순수 숫자 리스트
     kospi_nums = [clean_value(v) for v in merged['KOSPI']]
     kosdaq_nums = [clean_value(v) for v in merged['KOSDAQ']]
+    kospi_nums = sanitize_series(kospi_nums)
+    kosdaq_nums = sanitize_series(kosdaq_nums)
 
     # 최고/최저점 좌표 계산
     k_max_info, k_min_info = get_extrema_info(full_timeline, kospi_nums)
@@ -989,6 +1039,12 @@ def update_dashboard(selected_date):
                 position="right",
                 is_scale=True,
                 splitline_opts=opts.SplitLineOpts(is_show=False),
+                axislabel_opts=opts.LabelOpts(
+                    font_family="Inter",
+                    formatter=JsCode(
+                        "function (value) { return Number(value).toLocaleString('ko-KR', {maximumFractionDigits: 2}); }"
+                    ),
+                ),
             )
         )
         .set_global_opts(
@@ -1009,7 +1065,12 @@ def update_dashboard(selected_date):
                 max_=k_max_bound,
                 is_scale=True,
                 splitline_opts=opts.SplitLineOpts(is_show=True),
-                axislabel_opts=opts.LabelOpts(font_family="Inter"),
+                axislabel_opts=opts.LabelOpts(
+                    font_family="Inter",
+                    formatter=JsCode(
+                        "function (value) { return Number(value).toLocaleString('ko-KR', {maximumFractionDigits: 2}); }"
+                    ),
+                ),
             ),
             legend_opts=opts.LegendOpts(pos_top="5%", textstyle_opts=opts.TextStyleOpts(font_family="Inter")),
         )
