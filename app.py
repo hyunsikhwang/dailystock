@@ -809,16 +809,51 @@ def sanitize_series(values, max_jump_ratio=0.15, hard_ratio_limit=0.5):
 
     return sanitized
 
-def generate_full_timeline():
-    """09:00부터 15:30까지 1분 단위 리스트 생성"""
+def generate_full_timeline(end_time=None):
+    """09:00부터 종료 시각까지 1분 단위 리스트 생성"""
     start = datetime.combine(datetime.today(), time(9, 0))
-    end = datetime.combine(datetime.today(), time(15, 30))
+    end = datetime.combine(datetime.today(), end_time or time(15, 30))
     curr = start
     timeline = []
     while curr <= end:
         timeline.append(curr.strftime('%H:%M'))
         curr += timedelta(minutes=1)
     return timeline
+
+def get_latest_trade_time(*dfs):
+    """여러 지수 데이터프레임에서 가장 최근 체결 시각을 반환"""
+    latest_time = None
+
+    for df in dfs:
+        if df.empty or 'thistime' not in df.columns:
+            continue
+
+        valid_times = (
+            df['thistime']
+            .dropna()
+            .astype(str)
+            .str.extract(r'(\d{12})')[0]
+            .dropna()
+        )
+        if valid_times.empty:
+            continue
+
+        latest_raw = valid_times.max()
+        candidate_time = time(int(latest_raw[8:10]), int(latest_raw[10:12]))
+        if latest_time is None or candidate_time > latest_time:
+            latest_time = candidate_time
+
+    return latest_time
+
+def calculate_xaxis_label_interval(timeline_length):
+    """타임라인 길이에 따라 X축 라벨 간격을 조정"""
+    if timeline_length <= 30:
+        return 4
+    if timeline_length <= 90:
+        return 9
+    if timeline_length <= 180:
+        return 14
+    return 29
 
 def calculate_y_axis_bounds(values):
     """첫 번째 유효 데이터를 기준으로 Y축 min/max를 계산"""
@@ -883,13 +918,17 @@ def update_dashboard(selected_date):
     st.write(display_msg)
 
     # 전체 타임라인 생성 및 데이터 병합
-    full_timeline = generate_full_timeline()
+    latest_trade_time = get_latest_trade_time(df_kospi, df_kosdaq)
+    full_timeline = generate_full_timeline(end_time=latest_trade_time)
     timeline_df = pd.DataFrame({'time_hm': full_timeline})
+    xaxis_interval = calculate_xaxis_label_interval(len(full_timeline))
 
     def process_df(df, name):
-        if df.empty: return pd.DataFrame(columns=['time_hm', name])
-        df['time_hm'] = df['thistime'].apply(lambda x: f"{x[8:10]}:{x[10:12]}")
-        return df.sort_values('thistime')[['time_hm', 'nowVal']].rename(columns={'nowVal': name})
+        if df.empty:
+            return pd.DataFrame(columns=['time_hm', name])
+        processed_df = df.copy()
+        processed_df['time_hm'] = processed_df['thistime'].apply(lambda x: f"{x[8:10]}:{x[10:12]}")
+        return processed_df.sort_values('thistime')[['time_hm', 'nowVal']].rename(columns={'nowVal': name})
 
     df_p_kospi = process_df(df_kospi, 'KOSPI')
     df_p_kosdaq = process_df(df_kosdaq, 'KOSDAQ')
@@ -1056,7 +1095,7 @@ def update_dashboard(selected_date):
             xaxis_opts=opts.AxisOpts(
                 type_="category",
                 boundary_gap=False,
-                axislabel_opts=opts.LabelOpts(interval=29, font_family="Inter"), # 30분 단위 축 레이블 유지
+                axislabel_opts=opts.LabelOpts(interval=xaxis_interval, font_family="Inter"),
             ),
             yaxis_opts=opts.AxisOpts(
                 name="KOSPI",
