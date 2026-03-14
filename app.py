@@ -389,9 +389,8 @@ def extract_rows_from_krx_payload(payload):
             rows.extend([row for row in val if isinstance(row, dict)])
     return rows
 
-def fetch_krx_futures_by_date(bas_dd, auth_key):
-    """지정 기준일자 KRX 선물 데이터 조회"""
-    url = "https://data-dbg.krx.co.kr/svc/apis/drv/fut_bydd_trd.json"
+def fetch_krx_rows_by_date(url, bas_dd, auth_key):
+    """지정 기준일자 KRX API 행 데이터 조회"""
     params = {"AUTH_KEY": auth_key, "basDd": bas_dd}
     user_agent = (
         "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
@@ -506,6 +505,22 @@ def fetch_krx_futures_by_date(bas_dd, auth_key):
 
     raise request_err
 
+def fetch_krx_futures_by_date(bas_dd, auth_key):
+    """지정 기준일자 KRX 선물 데이터 조회"""
+    return fetch_krx_rows_by_date(
+        "https://data-dbg.krx.co.kr/svc/apis/drv/fut_bydd_trd.json",
+        bas_dd,
+        auth_key,
+    )
+
+def fetch_krx_derivative_index_by_date(bas_dd, auth_key):
+    """지정 기준일자 KRX 파생상품지수 데이터 조회"""
+    return fetch_krx_rows_by_date(
+        "https://data-dbg.krx.co.kr/svc/apis/idx/drvprod_dd_trd",
+        bas_dd,
+        auth_key,
+    )
+
 def normalize_kr_text(value):
     return re.sub(r"\s+", "", str(value or "")).strip()
 
@@ -572,6 +587,18 @@ def calculate_change_rate_from_close_and_delta(close_value, delta_value):
     if prev_close == 0:
         return None
     return f"{(delta_num / prev_close) * 100:.2f}"
+
+def normalize_change_rate_text(value):
+    """등락률 텍스트를 소수점 둘째 자리 문자열로 정규화"""
+    if value is None:
+        return None
+    text = str(value).replace("%", "").replace(",", "").strip()
+    if text in {"", "-"}:
+        return None
+    try:
+        return f"{float(text):.2f}"
+    except Exception:
+        return None
 
 def build_kospi_night_candidates(rows):
     """코스피200 선물/야간 후보에서 파싱 가능한 월물 목록 생성"""
@@ -696,8 +723,83 @@ def get_latest_kospi_night_futures():
     bas_dd_candidates = tuple(iter_basdd_candidates_kst())
     return _get_latest_kospi_night_futures_cached(auth_key, bas_dd_candidates, "debug-v2")
 
-def render_kospi_night_debug_logs(debug_logs):
-    """야간선물 조회 이력을 화면에 디버그용으로 표시"""
+def select_kospi200_volatility_index(rows):
+    """코스피200 변동성 지수 1건 선택"""
+    normalized_target = normalize_kr_text("코스피200변동성지수")
+    matches = []
+    for row in rows:
+        idx_nm = normalize_kr_text(row.get("IDX_NM"))
+        if idx_nm != normalized_target:
+            continue
+        matches.append(row)
+
+    if not matches:
+        return None
+
+    matches.sort(
+        key=lambda row: (
+            normalize_bas_dd(row.get("BAS_DD")),
+            str(row.get("IDX_CLSS", "")),
+            str(row.get("IDX_NM", "")),
+        ),
+        reverse=True,
+    )
+    return matches[0]
+
+@st.cache_data(show_spinner=False, ttl=60)
+def _get_latest_kospi200_volatility_index_cached(auth_key, bas_dd_candidates, debug_version):
+    """KRX AUTH_KEY와 기준일 후보에 종속된 변동성 지수 캐시 조회"""
+    debug_logs = []
+    last_error = None
+    for bas_dd in bas_dd_candidates:
+        try:
+            rows = fetch_krx_derivative_index_by_date(bas_dd, auth_key)
+        except Exception as e:
+            last_error = str(e)
+            debug_logs.append({
+                "request_bas_dd": bas_dd,
+                "status": "error",
+                "rows": 0,
+                "filtered": 0,
+                "selected_bas_dd": "-",
+                "selected_name": "-",
+                "selected_close": "-",
+                "message": str(e),
+            })
+            continue
+
+        selected = select_kospi200_volatility_index(rows)
+        filtered_count = sum(
+            1 for row in rows
+            if normalize_kr_text(row.get("IDX_NM")) == normalize_kr_text("코스피200변동성지수")
+        )
+        debug_logs.append({
+            "request_bas_dd": bas_dd,
+            "status": "ok",
+            "rows": len(rows),
+            "filtered": filtered_count,
+            "selected_bas_dd": str(selected.get("BAS_DD")) if selected else "-",
+            "selected_name": str(selected.get("IDX_NM")) if selected else "-",
+            "selected_close": str(selected.get("CLSPRC_IDX")) if selected else "-",
+            "message": "selected" if selected else "no-match",
+        })
+        if selected is not None:
+            return selected, None, debug_logs
+
+    if last_error:
+        return None, f"KRX API 호출 실패: {last_error}", debug_logs
+    return None, "최근 10일(내일 기준) 내 코스피200 변동성 지수 데이터가 없습니다.", debug_logs
+
+def get_latest_kospi200_volatility_index():
+    """최신 유효 코스피200 변동성 지수 데이터 1건 조회"""
+    auth_key, auth_msg = get_krx_auth_key()
+    if not auth_key:
+        return None, auth_msg, []
+    bas_dd_candidates = tuple(iter_basdd_candidates_kst())
+    return _get_latest_kospi200_volatility_index_cached(auth_key, bas_dd_candidates, "debug-v1")
+
+def render_krx_debug_logs(title, debug_logs, selected_name_col):
+    """KRX 조회 이력을 화면에 디버그용으로 표시"""
     if not debug_logs:
         return
 
@@ -709,10 +811,8 @@ def render_kospi_night_debug_logs(debug_logs):
         "status",
         "rows",
         "filtered",
-        "candidate_months",
-        "target_month",
         "selected_bas_dd",
-        "selected_isu_nm",
+        selected_name_col,
         "selected_close",
         "message",
     ]
@@ -728,14 +828,23 @@ def render_kospi_night_debug_logs(debug_logs):
             "target_month": "선택월물",
             "selected_bas_dd": "응답기준일",
             "selected_isu_nm": "선택종목",
+            "selected_name": "선택지수",
             "selected_close": "종가",
             "message": "메시지",
         }
     )
 
-    with st.expander("야간선물 데이터 조회 디버그", expanded=False):
+    with st.expander(title, expanded=False):
         st.caption("조회순서 1이 가장 먼저 요청된 기준일입니다. (내일→오늘→과거)")
         st.dataframe(logs_df, use_container_width=True, hide_index=True)
+
+def render_kospi_night_debug_logs(debug_logs):
+    """야간선물 조회 이력을 화면에 디버그용으로 표시"""
+    render_krx_debug_logs("야간선물 데이터 조회 디버그", debug_logs, "selected_isu_nm")
+
+def render_kospi200_volatility_debug_logs(debug_logs):
+    """변동성 지수 조회 이력을 화면에 디버그용으로 표시"""
+    render_krx_debug_logs("코스피200 변동성 지수 조회 디버그", debug_logs, "selected_name")
 
 def get_valid_data(start_date):
     """
@@ -1009,8 +1118,9 @@ def update_dashboard(selected_date):
         """, unsafe_allow_html=True)
 
     kospi_night_row, kospi_night_msg, kospi_night_debug_logs = get_latest_kospi_night_futures()
+    kospi200_vol_row, kospi200_vol_msg, kospi200_vol_debug_logs = get_latest_kospi200_volatility_index()
 
-    col1, col2, col3 = st.columns(3)
+    col1, col2, col3, col4 = st.columns(4)
     with col1:
         if not df_kospi.empty:
             curr = df_kospi.sort_values('thistime', ascending=False).iloc[0]
@@ -1044,8 +1154,36 @@ def update_dashboard(selected_date):
                 None,
                 extra_info=kospi_night_msg or "데이터를 가져올 수 없습니다.",
             )
+    with col4:
+        if kospi200_vol_row:
+            bas_dd_text = format_bas_dd(kospi200_vol_row.get("BAS_DD"))
+            idx_clss = str(kospi200_vol_row.get("IDX_CLSS") or "-")
+            idx_nm = str(kospi200_vol_row.get("IDX_NM") or "-")
+            extra = f"{bas_dd_text} | {idx_clss} | {idx_nm}"
+            change_rate = normalize_change_rate_text(kospi200_vol_row.get("FLUC_RT"))
+            if change_rate is None:
+                change_rate = calculate_change_rate_from_close_and_delta(
+                    kospi200_vol_row.get("CLSPRC_IDX"),
+                    kospi200_vol_row.get("CMPPREVDD_IDX"),
+                )
+            render_custom_metric(
+                "KOSPI 200 변동성 지수",
+                format_metric_number(kospi200_vol_row.get("CLSPRC_IDX")),
+                format_metric_number(kospi200_vol_row.get("CMPPREVDD_IDX")),
+                change_rate,
+                extra_info=extra,
+            )
+        else:
+            render_custom_metric(
+                "KOSPI 200 변동성 지수",
+                "-",
+                "-",
+                None,
+                extra_info=kospi200_vol_msg or "데이터를 가져올 수 없습니다.",
+            )
 
     render_kospi_night_debug_logs(kospi_night_debug_logs)
+    render_kospi200_volatility_debug_logs(kospi200_vol_debug_logs)
 
     # pyecharts 차트 구성 (마커 제거 버전)
     line = (
