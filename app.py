@@ -3,7 +3,7 @@ import streamlit.components.v1 as components
 from pyecharts import options as opts
 from pyecharts.charts import Line
 from pyecharts.commons.utils import JsCode
-from streamlit_echarts import st_pyecharts
+from streamlit_echarts import st_echarts
 import requests
 import pandas as pd
 import numpy as np
@@ -1279,7 +1279,10 @@ def update_dashboard(selected_date):
     line.options["series"][0]["labelLayout"] = {"moveOverlap": "shiftY"}
     line.options["series"][1]["labelLayout"] = {"moveOverlap": "shiftY"}
 
-    st_pyecharts(line, height="500px")
+    # `st_pyecharts`는 JsCode가 포함된 옵션을 내부에서 `json.loads(chart.dump_options())`
+    # 로 처리해 현재 환경의 streamlit-echarts 버전에서 JSONDecodeError를 유발한다.
+    # quoted 옵션을 직접 dict로 변환해 전달하면 JsCode placeholder는 유지되고 JSON 파싱은 안전하다.
+    st_echarts(options=json.loads(line.dump_options_with_quotes()), height="500px")
 
 def main():
     # Hero Section
