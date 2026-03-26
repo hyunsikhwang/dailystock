@@ -2,7 +2,6 @@ import streamlit as st
 import streamlit.components.v1 as components
 from pyecharts import options as opts
 from pyecharts.charts import Line
-from pyecharts.commons.utils import JsCode
 from streamlit_echarts import st_echarts
 import requests
 import pandas as pd
@@ -1216,12 +1215,7 @@ def update_dashboard(selected_date):
                 position="right",
                 is_scale=True,
                 splitline_opts=opts.SplitLineOpts(is_show=False),
-                axislabel_opts=opts.LabelOpts(
-                    font_family="Inter",
-                    formatter=JsCode(
-                        "function (value) { return Number(value).toLocaleString('ko-KR', {maximumFractionDigits: 2}); }"
-                    ),
-                ),
+                axislabel_opts=opts.LabelOpts(font_family="Inter"),
             )
         )
         .set_global_opts(
@@ -1242,12 +1236,7 @@ def update_dashboard(selected_date):
                 max_=k_max_bound,
                 is_scale=True,
                 splitline_opts=opts.SplitLineOpts(is_show=True),
-                axislabel_opts=opts.LabelOpts(
-                    font_family="Inter",
-                    formatter=JsCode(
-                        "function (value) { return Number(value).toLocaleString('ko-KR', {maximumFractionDigits: 2}); }"
-                    ),
-                ),
+                axislabel_opts=opts.LabelOpts(font_family="Inter"),
             ),
             legend_opts=opts.LegendOpts(pos_top="5%", textstyle_opts=opts.TextStyleOpts(font_family="Inter")),
         )
