@@ -835,7 +835,7 @@ def render_krx_debug_logs(title, debug_logs, selected_name_col):
 
     with st.expander(title, expanded=False):
         st.caption("조회순서 1이 가장 먼저 요청된 기준일입니다. (내일→오늘→과거)")
-        st.dataframe(logs_df, use_container_width=True, hide_index=True)
+        st.dataframe(logs_df, width="stretch", hide_index=True)
 
 def render_kospi_night_debug_logs(debug_logs):
     """야간선물 조회 이력을 화면에 디버그용으로 표시"""
@@ -1232,7 +1232,6 @@ def update_dashboard(selected_date):
             )
         )
         .set_global_opts(
-            textstyle_opts=opts.TextStyleOpts(color="#0f172a", font_family="Inter"),
             title_opts=opts.TitleOpts(
                 title="지수 실시간 추이",
                 title_textstyle_opts=opts.TextStyleOpts(
@@ -1348,7 +1347,7 @@ def main():
             st.rerun()
 
     with col_btn:
-        if st.button("오늘", use_container_width=True):
+        if st.button("오늘", width="stretch"):
             if st.session_state.selected_date != today:
                 st.session_state.selected_date = today
                 st.rerun()
