@@ -1186,7 +1186,13 @@ def update_dashboard(selected_date):
 
     # pyecharts 차트 구성 (마커 제거 버전)
     line = (
-        Line(init_opts=opts.InitOpts(height="500px", width="100%"))
+        Line(
+            init_opts=opts.InitOpts(
+                height="500px",
+                width="100%",
+                bg_color="#ffffff",
+            )
+        )
         .add_xaxis(xaxis_data=full_timeline)
         .add_yaxis(
             series_name="KOSPI",
@@ -1215,19 +1221,42 @@ def update_dashboard(selected_date):
                 position="right",
                 is_scale=True,
                 splitline_opts=opts.SplitLineOpts(is_show=False),
-                axislabel_opts=opts.LabelOpts(font_family="Inter"),
+                name_textstyle_opts=opts.TextStyleOpts(color="#475569", font_family="Inter"),
+                axisline_opts=opts.AxisLineOpts(
+                    linestyle_opts=opts.LineStyleOpts(color="#cbd5e1")
+                ),
+                axistick_opts=opts.AxisTickOpts(
+                    linestyle_opts=opts.LineStyleOpts(color="#cbd5e1")
+                ),
+                axislabel_opts=opts.LabelOpts(font_family="Inter", color="#475569"),
             )
         )
         .set_global_opts(
+            textstyle_opts=opts.TextStyleOpts(color="#0f172a", font_family="Inter"),
             title_opts=opts.TitleOpts(
                 title="지수 실시간 추이",
-                title_textstyle_opts=opts.TextStyleOpts(font_family="Inter", font_size=16, font_weight="bold")
+                title_textstyle_opts=opts.TextStyleOpts(
+                    font_family="Inter",
+                    font_size=16,
+                    font_weight="bold",
+                    color="#0f172a",
+                )
             ),
             tooltip_opts=opts.TooltipOpts(trigger="axis", axis_pointer_type="line"),
             xaxis_opts=opts.AxisOpts(
                 type_="category",
                 boundary_gap=False,
-                axislabel_opts=opts.LabelOpts(interval=xaxis_interval, font_family="Inter"),
+                axisline_opts=opts.AxisLineOpts(
+                    linestyle_opts=opts.LineStyleOpts(color="#cbd5e1")
+                ),
+                axistick_opts=opts.AxisTickOpts(
+                    linestyle_opts=opts.LineStyleOpts(color="#cbd5e1")
+                ),
+                axislabel_opts=opts.LabelOpts(
+                    interval=xaxis_interval,
+                    font_family="Inter",
+                    color="#475569",
+                ),
             ),
             yaxis_opts=opts.AxisOpts(
                 name="KOSPI",
@@ -1235,10 +1264,23 @@ def update_dashboard(selected_date):
                 min_=k_min_bound,
                 max_=k_max_bound,
                 is_scale=True,
-                splitline_opts=opts.SplitLineOpts(is_show=True),
-                axislabel_opts=opts.LabelOpts(font_family="Inter"),
+                name_textstyle_opts=opts.TextStyleOpts(color="#475569", font_family="Inter"),
+                axisline_opts=opts.AxisLineOpts(
+                    linestyle_opts=opts.LineStyleOpts(color="#cbd5e1")
+                ),
+                axistick_opts=opts.AxisTickOpts(
+                    linestyle_opts=opts.LineStyleOpts(color="#cbd5e1")
+                ),
+                splitline_opts=opts.SplitLineOpts(
+                    is_show=True,
+                    linestyle_opts=opts.LineStyleOpts(color="#e2e8f0"),
+                ),
+                axislabel_opts=opts.LabelOpts(font_family="Inter", color="#475569"),
             ),
-            legend_opts=opts.LegendOpts(pos_top="5%", textstyle_opts=opts.TextStyleOpts(font_family="Inter")),
+            legend_opts=opts.LegendOpts(
+                pos_top="5%",
+                textstyle_opts=opts.TextStyleOpts(font_family="Inter", color="#334155"),
+            ),
         )
     )
     
@@ -1271,7 +1313,11 @@ def update_dashboard(selected_date):
     # `st_pyecharts`는 JsCode가 포함된 옵션을 내부에서 `json.loads(chart.dump_options())`
     # 로 처리해 현재 환경의 streamlit-echarts 버전에서 JSONDecodeError를 유발한다.
     # quoted 옵션을 직접 dict로 변환해 전달하면 JsCode placeholder는 유지되고 JSON 파싱은 안전하다.
-    st_echarts(options=json.loads(line.dump_options_with_quotes()), height="500px")
+    st_echarts(
+        options=json.loads(line.dump_options_with_quotes()),
+        height="500px",
+        theme="light",
+    )
 
 def main():
     # Hero Section
