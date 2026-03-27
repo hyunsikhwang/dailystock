@@ -1234,6 +1234,7 @@ def update_dashboard(selected_date):
         .set_global_opts(
             title_opts=opts.TitleOpts(
                 title="지수 실시간 추이",
+                pos_top="1%",
                 title_textstyle_opts=opts.TextStyleOpts(
                     font_family="Inter",
                     font_size=16,
@@ -1277,7 +1278,7 @@ def update_dashboard(selected_date):
                 axislabel_opts=opts.LabelOpts(font_family="Inter", color="#475569"),
             ),
             legend_opts=opts.LegendOpts(
-                pos_top="5%",
+                pos_top="8%",
                 textstyle_opts=opts.TextStyleOpts(font_family="Inter", color="#334155"),
             ),
         )
@@ -1306,6 +1307,13 @@ def update_dashboard(selected_date):
     line.options["animation"] = True
     line.options["animationDuration"] = 10000
     line.options["animationThreshold"] = 0
+    line.options["grid"] = {
+        "top": "18%",
+        "left": "6%",
+        "right": "6%",
+        "bottom": "10%",
+        "containLabel": True,
+    }
     line.options["series"][0]["labelLayout"] = {"moveOverlap": "shiftY"}
     line.options["series"][1]["labelLayout"] = {"moveOverlap": "shiftY"}
 
