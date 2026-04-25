@@ -148,22 +148,6 @@ st.markdown("""
         z-index: 1;
     }
 
-    .trend-card-top {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        gap: 0.55rem;
-    }
-
-    .trend-card-label {
-        font-size: 0.67rem;
-        font-weight: 700;
-        opacity: 0.78;
-        letter-spacing: 0.06em;
-        text-transform: uppercase;
-        white-space: nowrap;
-    }
-
     .trend-card-status {
         font-size: 0.92rem;
         font-weight: 800;
@@ -176,23 +160,11 @@ st.markdown("""
         align-items: center;
         justify-content: space-between;
         gap: 0.6rem;
-        margin-top: 0.2rem;
     }
 
     .trend-card-delta {
         font-size: 0.82rem;
         font-weight: 700;
-        white-space: nowrap;
-    }
-
-    .trend-card-meta {
-        margin-top: 0.22rem;
-        display: flex;
-        justify-content: space-between;
-        gap: 0.5rem;
-        font-size: 0.67rem;
-        opacity: 0.78;
-        font-variant-numeric: tabular-nums;
         white-space: nowrap;
     }
 
@@ -1192,17 +1164,11 @@ def render_trend_card(trend):
         f"""
         <div class="{card_class}">
             <div class="trend-card-body">
-                <div class="trend-card-top">
-                    <div class="trend-card-label">{trend["label"]} · 30M</div>
-                    <div class="trend-card-delta">{delta_prefix}{trend["change_value"]:,.2f}</div>
-                </div>
                 <div class="trend-card-main">
                     <div class="trend-card-status">{trend["icon"]} {trend["status_text"]}</div>
-                    <div class="trend-card-delta">{delta_prefix}{trend["change_rate"]:.2f}%</div>
-                </div>
-                <div class="trend-card-meta">
-                    <span>{trend["start_time"]} ~ {trend["end_time"]}</span>
-                    <span>{trend["latest_value"]:,.2f}</span>
+                    <div class="trend-card-delta">
+                        {delta_prefix}{trend["change_value"]:,.2f} / {delta_prefix}{trend["change_rate"]:.2f}%
+                    </div>
                 </div>
             </div>
         </div>
