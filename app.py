@@ -99,55 +99,47 @@ st.markdown("""
     .trend-card {
         position: relative;
         overflow: hidden;
-        padding: 0.8rem 0.95rem;
-        border-radius: 14px;
-        border: 1px solid rgba(255, 255, 255, 0.28);
+        padding: 0.62rem 0.78rem;
+        border-radius: 12px;
+        border: 1px solid rgba(255, 255, 255, 0.2);
         color: #ffffff;
-        box-shadow: 0 10px 24px rgba(15, 23, 42, 0.08);
-        margin-bottom: 0.8rem;
+        box-shadow: 0 6px 16px rgba(15, 23, 42, 0.06);
+        margin-bottom: 0.65rem;
         isolation: isolate;
     }
 
     .trend-card::before {
         content: "";
         position: absolute;
-        inset: -180% auto auto -35%;
-        width: 34%;
+        inset: -220% auto auto -45%;
+        width: 24%;
         height: 360%;
-        background: linear-gradient(115deg, rgba(255, 255, 255, 0) 18%, rgba(255, 255, 255, 0.24) 50%, rgba(255, 255, 255, 0) 82%);
+        background: linear-gradient(115deg, rgba(255, 255, 255, 0) 24%, rgba(255, 255, 255, 0.14) 50%, rgba(255, 255, 255, 0) 76%);
         transform: rotate(18deg);
-        animation: trendShine 5.2s linear infinite;
+        animation: trendShine 6.4s linear infinite;
         pointer-events: none;
         z-index: 0;
     }
 
     .trend-card::after {
-        content: "";
-        position: absolute;
-        inset: auto -6% -52% auto;
-        width: 120px;
-        height: 120px;
-        border-radius: 50%;
-        background: rgba(255, 255, 255, 0.08);
-        filter: blur(6px);
-        z-index: 0;
+        display: none;
     }
 
     .trend-card-up {
         background:
-            radial-gradient(circle at top right, rgba(255, 236, 236, 0.45), rgba(255, 236, 236, 0) 38%),
+            radial-gradient(circle at top right, rgba(255, 236, 236, 0.2), rgba(255, 236, 236, 0) 34%),
             linear-gradient(135deg, #ef4444 0%, #fb7185 100%);
     }
 
     .trend-card-down {
         background:
-            radial-gradient(circle at top right, rgba(219, 234, 254, 0.45), rgba(219, 234, 254, 0) 38%),
+            radial-gradient(circle at top right, rgba(219, 234, 254, 0.2), rgba(219, 234, 254, 0) 34%),
             linear-gradient(135deg, #2563eb 0%, #38bdf8 100%);
     }
 
     .trend-card-flat {
         background:
-            radial-gradient(circle at top right, rgba(255, 255, 255, 0.28), rgba(255, 255, 255, 0) 38%),
+            radial-gradient(circle at top right, rgba(255, 255, 255, 0.14), rgba(255, 255, 255, 0) 34%),
             linear-gradient(135deg, #475569 0%, #94a3b8 100%);
     }
 
@@ -158,40 +150,50 @@ st.markdown("""
 
     .trend-card-top {
         display: flex;
-        align-items: baseline;
+        align-items: center;
         justify-content: space-between;
-        gap: 0.7rem;
+        gap: 0.55rem;
     }
 
     .trend-card-label {
-        font-size: 0.74rem;
+        font-size: 0.67rem;
         font-weight: 700;
-        opacity: 0.82;
-        letter-spacing: 0.04em;
+        opacity: 0.78;
+        letter-spacing: 0.06em;
         text-transform: uppercase;
+        white-space: nowrap;
     }
 
     .trend-card-status {
-        font-size: 1.1rem;
+        font-size: 0.92rem;
         font-weight: 800;
         line-height: 1.2;
         white-space: nowrap;
     }
 
+    .trend-card-main {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 0.6rem;
+        margin-top: 0.2rem;
+    }
+
     .trend-card-delta {
-        margin-top: 0.28rem;
-        font-size: 0.92rem;
+        font-size: 0.82rem;
         font-weight: 700;
+        white-space: nowrap;
     }
 
     .trend-card-meta {
-        margin-top: 0.45rem;
+        margin-top: 0.22rem;
         display: flex;
         justify-content: space-between;
-        gap: 0.8rem;
-        font-size: 0.74rem;
-        opacity: 0.84;
+        gap: 0.5rem;
+        font-size: 0.67rem;
+        opacity: 0.78;
         font-variant-numeric: tabular-nums;
+        white-space: nowrap;
     }
 
     @keyframes trendShine {
@@ -1192,14 +1194,15 @@ def render_trend_card(trend):
             <div class="trend-card-body">
                 <div class="trend-card-top">
                     <div class="trend-card-label">{trend["label"]} · 30M</div>
-                    <div class="trend-card-status">{trend["icon"]} {trend["status_text"]}</div>
+                    <div class="trend-card-delta">{delta_prefix}{trend["change_value"]:,.2f}</div>
                 </div>
-                <div class="trend-card-delta">
-                    {delta_prefix}{trend["change_value"]:,.2f} ({delta_prefix}{trend["change_rate"]:.2f}%)
+                <div class="trend-card-main">
+                    <div class="trend-card-status">{trend["icon"]} {trend["status_text"]}</div>
+                    <div class="trend-card-delta">{delta_prefix}{trend["change_rate"]:.2f}%</div>
                 </div>
                 <div class="trend-card-meta">
                     <span>{trend["start_time"]} ~ {trend["end_time"]}</span>
-                    <span>현재 {trend["latest_value"]:,.2f}</span>
+                    <span>{trend["latest_value"]:,.2f}</span>
                 </div>
             </div>
         </div>
