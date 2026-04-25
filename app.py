@@ -95,6 +95,104 @@ st.markdown("""
         color: #0f172a !important;
         border-color: #cbd5e1 !important;
     }
+
+    .trend-card {
+        position: relative;
+        overflow: hidden;
+        padding: 1.15rem 1.2rem;
+        border-radius: 18px;
+        border: 1px solid rgba(255, 255, 255, 0.4);
+        color: #ffffff;
+        box-shadow: 0 16px 40px rgba(15, 23, 42, 0.12);
+        margin-bottom: 1rem;
+        isolation: isolate;
+    }
+
+    .trend-card::before {
+        content: "";
+        position: absolute;
+        inset: -120% auto auto -20%;
+        width: 42%;
+        height: 320%;
+        background: linear-gradient(115deg, rgba(255, 255, 255, 0) 15%, rgba(255, 255, 255, 0.34) 50%, rgba(255, 255, 255, 0) 85%);
+        transform: rotate(18deg);
+        animation: trendShine 4.2s linear infinite;
+        pointer-events: none;
+        z-index: 0;
+    }
+
+    .trend-card::after {
+        content: "";
+        position: absolute;
+        inset: auto -10% -45% auto;
+        width: 180px;
+        height: 180px;
+        border-radius: 50%;
+        background: rgba(255, 255, 255, 0.12);
+        filter: blur(8px);
+        z-index: 0;
+    }
+
+    .trend-card-up {
+        background:
+            radial-gradient(circle at top right, rgba(255, 236, 236, 0.45), rgba(255, 236, 236, 0) 38%),
+            linear-gradient(135deg, #ef4444 0%, #fb7185 100%);
+    }
+
+    .trend-card-down {
+        background:
+            radial-gradient(circle at top right, rgba(219, 234, 254, 0.45), rgba(219, 234, 254, 0) 38%),
+            linear-gradient(135deg, #2563eb 0%, #38bdf8 100%);
+    }
+
+    .trend-card-flat {
+        background:
+            radial-gradient(circle at top right, rgba(255, 255, 255, 0.28), rgba(255, 255, 255, 0) 38%),
+            linear-gradient(135deg, #475569 0%, #94a3b8 100%);
+    }
+
+    .trend-card-body {
+        position: relative;
+        z-index: 1;
+    }
+
+    .trend-card-label {
+        font-size: 0.85rem;
+        font-weight: 700;
+        opacity: 0.88;
+        letter-spacing: 0.04em;
+    }
+
+    .trend-card-status {
+        margin-top: 0.45rem;
+        font-size: 1.65rem;
+        font-weight: 800;
+        line-height: 1.2;
+    }
+
+    .trend-card-delta {
+        margin-top: 0.35rem;
+        font-size: 1rem;
+        font-weight: 700;
+    }
+
+    .trend-card-meta {
+        margin-top: 0.8rem;
+        display: flex;
+        justify-content: space-between;
+        gap: 0.8rem;
+        font-size: 0.8rem;
+        opacity: 0.92;
+    }
+
+    @keyframes trendShine {
+        0% {
+            transform: translateX(-160%) rotate(18deg);
+        }
+        100% {
+            transform: translateX(360%) rotate(18deg);
+        }
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -1012,6 +1110,92 @@ def get_extrema_info(timeline, values):
     
     return max_item, min_item
 
+def calculate_recent_trend(df, label):
+    """최근 30분(장 시작 30분 전이면 장 시작 이후 전체) 기준 추세 정보를 계산"""
+    if df.empty or "thistime" not in df.columns or "nowVal" not in df.columns:
+        return None
+
+    working = df.copy()
+    parsed_time = pd.to_datetime(
+        working["thistime"].astype(str).str.extract(r"(\d{12})")[0],
+        format="%Y%m%d%H%M",
+        errors="coerce",
+    )
+    working["parsed_time"] = parsed_time
+    working["value_num"] = pd.to_numeric(working["nowVal"], errors="coerce")
+    working = working.dropna(subset=["parsed_time", "value_num"]).sort_values("parsed_time")
+
+    if working.empty:
+        return None
+
+    latest_row = working.iloc[-1]
+    latest_time = latest_row["parsed_time"]
+    session_open = latest_time.replace(hour=9, minute=0, second=0, microsecond=0)
+    window_start = max(session_open, latest_time - timedelta(minutes=30))
+
+    window_df = working.loc[working["parsed_time"] >= window_start]
+    if window_df.empty:
+        return None
+
+    start_row = window_df.iloc[0]
+    latest_value = float(latest_row["value_num"])
+    start_value = float(start_row["value_num"])
+    change_value = latest_value - start_value
+    change_rate = (change_value / start_value * 100) if start_value else 0.0
+
+    if change_value > 0:
+        direction = "up"
+        status_text = "상승 추세"
+        icon = "▲"
+    elif change_value < 0:
+        direction = "down"
+        status_text = "하락 추세"
+        icon = "▼"
+    else:
+        direction = "flat"
+        status_text = "보합권"
+        icon = "■"
+
+    return {
+        "label": label,
+        "direction": direction,
+        "status_text": status_text,
+        "icon": icon,
+        "start_time": start_row["parsed_time"].strftime("%H:%M"),
+        "end_time": latest_time.strftime("%H:%M"),
+        "start_value": start_value,
+        "latest_value": latest_value,
+        "change_value": change_value,
+        "change_rate": change_rate,
+    }
+
+def render_trend_card(trend):
+    """최근 추세를 강조 카드로 렌더링"""
+    if not trend:
+        return
+
+    card_class = f"trend-card trend-card-{trend['direction']}"
+    delta_prefix = "+" if trend["change_value"] > 0 else ""
+
+    st.markdown(
+        f"""
+        <div class="{card_class}">
+            <div class="trend-card-body">
+                <div class="trend-card-label">{trend["label"]} 최근 흐름</div>
+                <div class="trend-card-status">{trend["icon"]} {trend["status_text"]}</div>
+                <div class="trend-card-delta">
+                    {delta_prefix}{trend["change_value"]:,.2f} ({delta_prefix}{trend["change_rate"]:.2f}%)
+                </div>
+                <div class="trend-card-meta">
+                    <span>판단 구간 {trend["start_time"]} ~ {trend["end_time"]}</span>
+                    <span>현재 {trend["latest_value"]:,.2f}</span>
+                </div>
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
 @st.fragment(run_every=60)
 def update_dashboard(selected_date):
     with st.spinner('데이터를 불러오고 있습니다...'):
@@ -1040,6 +1224,8 @@ def update_dashboard(selected_date):
 
     df_p_kospi = process_df(df_kospi, 'KOSPI')
     df_p_kosdaq = process_df(df_kosdaq, 'KOSDAQ')
+    kospi_trend = calculate_recent_trend(df_kospi, "KOSPI")
+    kosdaq_trend = calculate_recent_trend(df_kosdaq, "KOSDAQ")
 
     merged = pd.merge(timeline_df, df_p_kospi, on='time_hm', how='left')
     merged = pd.merge(merged, df_p_kosdaq, on='time_hm', how='left')
@@ -1180,6 +1366,14 @@ def update_dashboard(selected_date):
                 None,
                 extra_info=kospi200_vol_msg or "데이터를 가져올 수 없습니다.",
             )
+
+    trend_col1, trend_col2 = st.columns(2)
+    with trend_col1:
+        if kospi_trend:
+            render_trend_card(kospi_trend)
+    with trend_col2:
+        if kosdaq_trend:
+            render_trend_card(kosdaq_trend)
 
     render_kospi_night_debug_logs(kospi_night_debug_logs)
     render_kospi200_volatility_debug_logs(kospi200_vol_debug_logs)
