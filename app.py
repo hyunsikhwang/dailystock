@@ -148,6 +148,16 @@ st.markdown("""
         z-index: 1;
     }
 
+    .trend-card-label {
+        margin-bottom: 0.16rem;
+        font-size: 0.66rem;
+        font-weight: 700;
+        letter-spacing: 0.06em;
+        opacity: 0.8;
+        text-transform: uppercase;
+        white-space: nowrap;
+    }
+
     .trend-card-status {
         font-size: 0.92rem;
         font-weight: 800;
@@ -1164,6 +1174,7 @@ def render_trend_card(trend):
         f"""
         <div class="{card_class}">
             <div class="trend-card-body">
+                <div class="trend-card-label">{trend["label"]}</div>
                 <div class="trend-card-main">
                     <div class="trend-card-status">{trend["icon"]} {trend["status_text"]}</div>
                     <div class="trend-card-delta">
