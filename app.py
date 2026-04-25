@@ -1366,9 +1366,6 @@ def update_dashboard(selected_date):
         if kosdaq_trend:
             render_trend_card(kosdaq_trend)
 
-    render_kospi_night_debug_logs(kospi_night_debug_logs)
-    render_kospi200_volatility_debug_logs(kospi200_vol_debug_logs)
-
     # pyecharts 차트 구성 (마커 제거 버전)
     line = (
         Line(
@@ -1510,6 +1507,9 @@ def update_dashboard(selected_date):
         height="500px",
         theme="light",
     )
+
+    render_kospi_night_debug_logs(kospi_night_debug_logs)
+    render_kospi200_volatility_debug_logs(kospi200_vol_debug_logs)
 
 def main():
     # Hero Section
